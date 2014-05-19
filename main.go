@@ -1,7 +1,11 @@
 package main
 
 import (
+	models "github.com/microcosm-cc/export-schemas/go/forum"
 	"github.com/microcosm-cc/goconfig"
+
+	"encoding/json"
+	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -22,7 +26,7 @@ func storeID(itemType string, path string, itemMap map[int]string) {
 	strID := strings.Split(path, itemType)[1]
 	// Split file extension
 	strID = strings.Split(strID, ".json")[0]
-	// Replace path delimeters to extract ID.
+	// Replace path delimiters to extract ID.
 	strID = strings.Replace(strID, "/", "", -1)
 
 	// Store ID and associated file path in itemMap.
@@ -69,6 +73,15 @@ func main() {
 		keys = append(keys, key)
 	}
 	sort.Ints(keys)
-	log.Print(keys)
 
+	// Iterate map in order
+	for _, ID := range keys {
+		bytes, err := ioutil.ReadFile(userMap[ID])
+		if err != nil {
+			log.Printf("Error opening path: %d\n", ID)
+			continue
+		}
+		user := models.User{}
+		json.Unmarshal(bytes, &user)
+	}
 }
