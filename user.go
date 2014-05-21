@@ -12,15 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 )
-
-type UserType struct {
-	Id      int64     `json:"userId"`
-	Email   string    `json:"email"`
-	Created time.Time `json:"created"`
-	Banned  bool      `json:"banned,omitempty"`
-}
 
 const usersPath string = "users"
 
@@ -40,7 +32,8 @@ func storeID(itemType string, path string, itemMap map[int]string) {
 	itemMap[ID] = path
 }
 
-func LoadUsers(rootpath string, ownerId int64) (owner UserType, users []UserType, err error) {
+// Loads all users from JSON files into exports.User structs and returns the owner separately.
+func LoadUsers(rootpath string, ownerId int64) (owner exports.User, users []exports.User, err error) {
 
 	// Build a map of User ID -> file path.
 	userMap := make(map[int]string)
@@ -80,32 +73,33 @@ func LoadUsers(rootpath string, ownerId int64) (owner UserType, users []UserType
 			continue
 		}
 
-		user := UserType{
-			Email:   exUser.Email,
-			Created: exUser.DateCreated,
-			Banned:  exUser.Banned,
-		}
-
 		if exUser.Id == ownerId {
-			owner = user
+			owner = exUser
 		} else {
-			users = append(users, user)
+			users = append(users, exUser)
 		}
 	}
 	return
 }
 
-func StoreUser(db *sql.DB, user UserType) (userId int64, err error) {
+// Stores a single user, but does not create an associated profile.
+func StoreUser(db *sql.DB, user exports.User) (userId int64, err error) {
 
 	tx, err := db.Begin()
+	defer tx.Rollback()
 	if err != nil {
 		return
 	}
-	err = tx.QueryRow(`INSERT INTO users (email, created, banned) VALUES ($1, $2, $3) RETURNING user_id;`, user.Email, user.Created, user.Banned).Scan(&userId)
+	err = tx.QueryRow(
+		`INSERT INTO users (email, language, created, is_banned, password, password_date) VALUES ($1, $2, $3, $4, '', NOW()) RETURNING user_id;`,
+		user.Email,
+		"en-gb",
+		user.DateCreated,
+		user.Banned,
+	).Scan(&userId)
+	if err != nil {
+		return
+	}
 	err = tx.Commit()
-	if err != nil {
-		tx.Rollback()
-		return
-	}
 	return
 }
