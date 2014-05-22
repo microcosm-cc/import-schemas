@@ -1,3 +1,16 @@
+[database]
+host=sql.dev.microcosm.cc
+port=5432
+database=microcosm
+username=microcosm
+password=changeme
+
+[site]
+name = LFGSS
+description = London Fixed-Gear and Single-Speed
+subdomain_key = lfgssimport
+owner_id = 1
+
 [export]
-rootpath = /path/to/exports
+rootpath = /home/matt/dev/exports/exported
 
