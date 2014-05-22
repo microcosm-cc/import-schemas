@@ -23,7 +23,7 @@ func main() {
 	}
 
 	// Load all users, then create a single user entry corresponding to the site owner.
-	owner, _, err := LoadUsers(config.Rootpath, config.SiteOwnerId)
+	owner, users, err := LoadUsers(config.Rootpath, config.SiteOwnerId)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -56,6 +56,21 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Finally, store the rest of the users, creating profiles for each of them.
+	// Finally, store the rest of the users and create profiles.
+	for _, user := range users {
+		userId, err := StoreUser(db, user)
+		if err != nil {
+			log.Print(err)
+		}
+		err = RecordImport(db, originId, ItemTypeUser, user.Id, userId)
+		if err != nil {
+			log.Print(err)
+		}
+		err = StoreProfile(db, siteId, user)
+		if err != nil {
+			log.Print(err)
+		}
+		fmt.Printf(".")
+	}
 
 }
