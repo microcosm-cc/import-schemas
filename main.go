@@ -40,14 +40,21 @@ func main() {
 		ThemeId:      1,
 	}
 	siteId, profileId, err := CreateOwnedSite(db, owner.Name, ownerId, site)
-	log.Print(siteId)
-	log.Print(profileId)
+	log.Printf("New site ID: %d\n", siteId)
+	log.Printf("Owner profile ID: %d\n", profileId)
 
 	// Now, create an import origin.
-	//`INSERT INTO origins...`
+	originId, err := CreateImportOrigin(db, site.Title, siteId)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("Origin ID: %d\n", originId)
 
-	// Then, record the import of the site owner
-	//RecordImport(...)
+	// Now record the import of the site owner
+	err = RecordImport(db, originId, ItemTypeUser, owner.Id, ownerId)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Finally, store the rest of the users, creating profiles for each of them.
 
