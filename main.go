@@ -56,21 +56,30 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Finally, store the rest of the users and create profiles.
+	// Finally, store the rest of the users and create a profile for each.
 	for _, user := range users {
-		userId, err := StoreUser(db, user)
+		newUserId, err := StoreUser(db, user)
 		if err != nil {
 			log.Print(err)
 		}
-		err = RecordImport(db, originId, ItemTypeUser, user.Id, userId)
+		err = RecordImport(db, originId, ItemTypeUser, user.Id, newUserId)
 		if err != nil {
 			log.Print(err)
 		}
-		err = StoreProfile(db, siteId, user)
+		avatarUrl := sql.NullString{
+			String: "/api/v1/files/66cca61feb8001cb71a9fb7062ff94c9d2543340",
+			Valid:  true,
+		}
+		profile := Profile{
+			SiteId:            siteId,
+			UserId:            newUserId,
+			ProfileName:       user.Name,
+			AvatarUrlNullable: avatarUrl,
+		}
+		err = StoreProfile(db, profile)
 		if err != nil {
 			log.Print(err)
 		}
-		fmt.Printf(".")
 	}
 
 }

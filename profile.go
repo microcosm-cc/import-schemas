@@ -2,10 +2,18 @@ package main
 
 import (
 	"database/sql"
-	exports "github.com/microcosm-cc/export-schemas/go/forum"
 )
 
-func StoreProfile(db *sql.DB, siteId int64, user exports.User) error {
+type Profile struct {
+	ProfileName       string
+	SiteId            int64
+	UserId            int64
+	ProfileId         int64
+	AvatarIdNullable  sql.NullInt64
+	AvatarUrlNullable sql.NullString
+}
+
+func StoreProfile(db *sql.DB, profile Profile) error {
 
 	tx, err := db.Begin()
 	defer tx.Rollback()
@@ -18,11 +26,12 @@ func StoreProfile(db *sql.DB, siteId int64, user exports.User) error {
             style_id, created, last_active, avatar_id, avatar_url
         ) VALUES (
             $1, $2, $3, true,
-            1, NOW(), NOW(), 1, ''
+            1, NOW(), NOW(), NULL, $4
         );`,
-		siteId,
-		user.Id,
-		user.Name,
+		profile.SiteId,
+		profile.UserId,
+		profile.ProfileName,
+		profile.AvatarUrlNullable,
 	)
 	if err != nil {
 		return err

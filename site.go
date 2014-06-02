@@ -18,22 +18,12 @@ type Site struct {
 	LinkColor          string
 }
 
-// TODO: move to profile.go
-type Profile struct {
-	UserId            int64
-	ProfileName       string
-	AvatarIdNullable  sql.NullInt64
-	AvatarUrlNullable string
-	Visible           bool
-}
-
 func CreateOwnedSite(db *sql.DB, ownerName string, userId int64, site Site) (siteId int64, profileId int64, err error) {
 
 	// Create simple profile for site owner.
 	profile := Profile{
 		ProfileName: ownerName,
 		UserId:      userId,
-		Visible:     true,
 	}
 
 	tx, err := db.Begin()
