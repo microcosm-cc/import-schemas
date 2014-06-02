@@ -73,7 +73,7 @@ func LoadUsers(rootpath string, ownerId int64) (owner exports.User, users []expo
 			continue
 		}
 
-		if exUser.Id == ownerId {
+		if exUser.ID == ownerId {
 			owner = exUser
 		} else {
 			users = append(users, exUser)
