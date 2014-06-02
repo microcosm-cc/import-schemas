@@ -13,28 +13,31 @@ type Profile struct {
 	AvatarUrlNullable sql.NullString
 }
 
-func StoreProfile(db *sql.DB, profile Profile) error {
+func StoreProfile(db *sql.DB, profile Profile) (int64, error) {
 
 	tx, err := db.Begin()
 	defer tx.Rollback()
 	if err != nil {
-		return err
+		return 0, err
 	}
-	_, err = tx.Exec(
+
+	var profileID int64
+	err = tx.QueryRow(
 		`INSERT INTO profiles (
             site_id, user_id, profile_name, is_visible,
             style_id, created, last_active, avatar_id, avatar_url
         ) VALUES (
             $1, $2, $3, true,
             1, NOW(), NOW(), NULL, $4
-        );`,
+        ) RETURNING profile_id;`,
 		profile.SiteId,
 		profile.UserId,
 		profile.ProfileName,
 		profile.AvatarUrlNullable,
-	)
+	).Scan(&profileID)
 	if err != nil {
-		return err
+		return profileID, err
 	}
-	return tx.Commit()
+	err = tx.Commit()
+	return profileID, err
 }
