@@ -63,6 +63,7 @@ func main() {
 	}
 
 	// Store the remaining users and create a profile for each.
+	// Map of imported User ID to new Profile ID.
 	importedProfiles := make(map[int64]int64)
 
 	for _, user := range users {
@@ -141,30 +142,50 @@ func main() {
 	}
 
 	// Conversations
-	/*
-		    cMap, err := walk.WalkExports(config.Rootpath, "conversations")
+	cMap, err := walk.WalkExports(config.Rootpath, "conversations")
 
-			var keys []int
-			for key, _ := range cMap {
-				keys = append(keys, key)
-			}
-			sort.Ints(keys)
+	var keys []int
+	for key, _ := range cMap {
+		keys = append(keys, key)
+	}
+	sort.Ints(keys)
 
-			// Iterate map in order
-			for _, ID := range keys {
-				bytes, err := ioutil.ReadFile(exportsMap[ID])
-				if err != nil {
-					log.Printf("Error opening path: %d\n", ID)
-					continue
-				}
-				exConv := exports.Conversation{}
-				err = json.Unmarshal(bytes, &exConv)
-				if err != nil {
-					log.Print(err)
-					continue
-				}
+	// Iterate map in order
+	for _, ID := range keys {
+		bytes, err := ioutil.ReadFile(cMap[ID])
+		if err != nil {
+			log.Printf("Error opening path: %d\n", ID)
+			continue
+		}
+		exConv := exports.Conversation{}
+		err = json.Unmarshal(bytes, &exConv)
+		if err != nil {
+			log.Print(err)
+			continue
+		}
+		// Look up the correct profile based on the old user ID.
+		creatorId, ok := importedProfiles[exConv.Author]
+		if !ok {
+			log.Printf("User ID %d does not have a corresponding profile\n")
+		}
 
-			}
-	*/
+		// TODO: Look up the correct microcosms ID based on the old Forum ID.
+		c := Conversation{
+			MicrocosmID: 1,
+			Title:       exConv.Name,
+			Created:     exConv.DateCreated,
+			CreatedBy:   creatorId,
+			ViewCount:   exConv.ViewCount,
+			IsSticky:    false,
+			IsOpen:      true,
+			IsDeleted:   false,
+			IsModerated: false,
+			IsVisible:   true,
+		}
+		_, err = StoreConversation(db, c)
+		if err != nil {
+			log.Print(err)
+		}
+	}
 
 }
