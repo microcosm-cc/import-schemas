@@ -16,6 +16,7 @@ type Microcosm struct {
 	IsModerated bool
 	IsOpen      bool
 	IsDeleted   bool
+	IsVisible   bool
 }
 
 func StoreMicrocosm(db *sql.DB, m Microcosm) (int64, error) {
@@ -34,9 +35,9 @@ func StoreMicrocosm(db *sql.DB, m Microcosm) (int64, error) {
         ) VALUES (
             $1, $2, $3, NOW(), $4, $5,
             $6, $7, $8, $9, $10
-        );`,
-		m.Title, m.Description, m.SiteId, m.Created, m.CreatedBy, m.OwnedBy,
-		m.IsSticky, m.IsModerated, m.IsOpen, m.IsDeleted,
+        ) RETURNING microcosm_id;`,
+		m.Title, m.Description, m.SiteId, m.CreatedBy, m.OwnedBy,
+		m.IsSticky, m.IsModerated, m.IsOpen, m.IsDeleted, m.IsVisible,
 	).Scan(&microcosmID)
 
 	if err != nil {

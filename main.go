@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"log"
 	"sort"
+	"time"
 )
 
 func main() {
@@ -115,23 +116,28 @@ func main() {
 
 		// CreatedBy/OwnedBy are assumed to be the site owner.
 		m := Microcosm{
+			SiteId:      siteId,
 			Title:       exForum.Name,
 			Description: exForum.Text,
+			Created:     time.Now(),
 			CreatedBy:   ownerId,
 			OwnedBy:     ownerId,
 			IsOpen:      exForum.Open,
 			IsSticky:    exForum.Sticky,
 			IsModerated: exForum.Moderated,
 			IsDeleted:   exForum.Deleted,
+			IsVisible:   true,
 		}
 		mID, err := StoreMicrocosm(db, m)
 		if err != nil {
 			log.Print(err)
 			continue
 		}
-		log.Print(mID)
+		log.Printf("Created microcosm %d\n", mID)
 		err = RecordImport(db, originId, ItemTypeMicrocosm, exForum.ID, mID)
-		log.Print(err)
+		if err != nil {
+			log.Print(err)
+		}
 	}
 
 	// Conversations
