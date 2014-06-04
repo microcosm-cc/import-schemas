@@ -43,163 +43,209 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Load all users, then create a single user entry corresponding to the site owner.
-	exOwner, users, err := LoadUsers(config.Rootpath, config.SiteOwnerId)
+	// Load all users and create a single user entry corresponding to the site owner.
+	eOwner, eUsers, err := LoadUsers(config.Rootpath, config.SiteOwnerId)
 	if err != nil {
 		log.Fatal(err)
 	}
-	ownerId, err := StoreUser(db, exOwner)
+	iOwnerId, err := StoreUser(db, eOwner)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Then, use create_owned_site which will create the site and owner's profile.
+	// Use create_owned_site which will create the site and owner's profile.
 	site := Site{
 		Title:        config.SiteName,
 		SubdomainKey: config.SiteSubdomainKey,
 		Description:  config.SiteDesc,
 		ThemeId:      1,
 	}
-	siteId, profileId, err := CreateOwnedSite(db, exOwner.Name, ownerId, site)
-	log.Printf("New site ID: %d\n", siteId)
-	log.Printf("Owner profile ID: %d\n", profileId)
-
-	// Now, create an import origin.
-	originId, err := CreateImportOrigin(db, site.Title, siteId)
+	iSiteId, iProfileId, err := CreateOwnedSite(db, eOwner.Name, iOwnerId, site)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("Origin ID: %d\n", originId)
+	log.Printf("Created new site: %s, ID: %d\n", site.Title, iSiteId)
+	log.Printf("Owner profile ID: %d\n", iProfileId)
 
-	// Now record the import of the site owner
-	err = RecordImport(db, originId, ItemTypeUser, exOwner.ID, ownerId)
+	// Create an import origin.
+	originId, err := CreateImportOrigin(db, site.Title, iSiteId)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Store the remaining users and create a profile for each.
-	// Map of imported User ID to new Profile ID.
-	importedProfiles := make(map[int64]int64)
+	// Record the import of the site owner.
+	err = RecordImport(db, originId, ItemTypeUser, eOwner.ID, iOwnerId)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	for _, user := range users {
-		newUserId, err := StoreUser(db, user)
+	log.Print("Importing users...")
+	// Map imported User ID to new Profile ID.
+	pMap := make(map[int64]int64)
+	// Import the remaining users and create a profile for each.
+	for idx, user := range eUsers {
+
+		iUserId, err := StoreUser(db, user)
 		if err != nil {
-			log.Print(err)
+			errors = append(errors, err)
+			continue
 		}
-		err = RecordImport(db, originId, ItemTypeUser, user.ID, newUserId)
+
+		err = RecordImport(db, originId, ItemTypeUser, user.ID, iUserId)
 		if err != nil {
-			log.Print(err)
+			errors = append(errors, err)
+			continue
 		}
+
+		// Create a corresponding profile for the user.
 		avatarUrl := sql.NullString{
 			String: "/api/v1/files/66cca61feb8001cb71a9fb7062ff94c9d2543340",
 			Valid:  true,
 		}
 		profile := Profile{
-			SiteId:            siteId,
-			UserId:            newUserId,
+			SiteId:            iSiteId,
+			UserId:            iUserId,
 			ProfileName:       user.Name,
 			AvatarUrlNullable: avatarUrl,
 		}
-		profileID, err := StoreProfile(db, profile)
+		iProfileID, err := StoreProfile(db, profile)
 		if err != nil {
-			log.Print(err)
+			errors = append(errors, err)
+			continue
 		}
+		pMap[user.ID] = iProfileID
 
-		importedProfiles[user.ID] = profileID
-		fmt.Printf(".")
+		if idx%10 == 0 {
+			fmt.Printf(".")
+		}
 	}
+	fmt.Print("\n")
 
 	// Forums
-	fMap, err := walk.WalkExports(config.Rootpath, "forums")
+	log.Print("Importing forums...")
+	eForumMap, err := walk.WalkExports(config.Rootpath, "forums")
+	if err != nil {
+		exitWithError(err, errors)
+	}
 	var fKeys []int
-	for key, _ := range fMap {
+	for key, _ := range eForumMap {
 		fKeys = append(fKeys, key)
 	}
 	sort.Ints(fKeys)
 
-	for _, ID := range fKeys {
-		bytes, err := ioutil.ReadFile(fMap[ID])
+	// Map of Forum ID to new Microcosm ID.
+	fMap := make(map[int]int64)
+
+	for _, FID := range fKeys {
+		bytes, err := ioutil.ReadFile(eForumMap[FID])
 		if err != nil {
-			log.Printf("Error opening path: %d\n", ID)
+			errors = append(errors, err)
 			continue
 		}
-		exForum := exports.Forum{}
-		err = json.Unmarshal(bytes, &exForum)
+		eForum := exports.Forum{}
+		err = json.Unmarshal(bytes, &eForum)
 		if err != nil {
-			log.Print(err)
+			errors = append(errors, err)
 			continue
 		}
 
-		// CreatedBy/OwnedBy are assumed to be the site owner.
+		// CreatedBy and OwnedBy are assumed to be the site owner.
 		m := Microcosm{
-			SiteId:      siteId,
-			Title:       exForum.Name,
-			Description: exForum.Text,
+			SiteId:      iSiteId,
+			Title:       eForum.Name,
+			Description: eForum.Text,
 			Created:     time.Now(),
-			CreatedBy:   ownerId,
-			OwnedBy:     ownerId,
-			IsOpen:      exForum.Open,
-			IsSticky:    exForum.Sticky,
-			IsModerated: exForum.Moderated,
-			IsDeleted:   exForum.Deleted,
+			CreatedBy:   iProfileId,
+			OwnedBy:     iProfileId,
+			IsOpen:      eForum.Open,
+			IsSticky:    eForum.Sticky,
+			IsModerated: eForum.Moderated,
+			IsDeleted:   eForum.Deleted,
 			IsVisible:   true,
 		}
-		mID, err := StoreMicrocosm(db, m)
+		MID, err := StoreMicrocosm(db, m)
 		if err != nil {
-			log.Print(err)
+			errors = append(errors, err)
 			continue
 		}
-		log.Printf("Created microcosm %d\n", mID)
-		err = RecordImport(db, originId, ItemTypeMicrocosm, exForum.ID, mID)
+		err = RecordImport(db, originId, ItemTypeMicrocosm, eForum.ID, MID)
 		if err != nil {
-			log.Print(err)
+			errors = append(errors, err)
+			continue
 		}
+
+		fMap[FID] = MID
+		log.Printf("Created microcosm: %d\n", MID)
 	}
 
 	// Conversations
-	cMap, err := walk.WalkExports(config.Rootpath, "conversations")
-
-	var keys []int
-	for key, _ := range cMap {
-		keys = append(keys, key)
+	eConvMap, err := walk.WalkExports(config.Rootpath, "conversations")
+	if err != nil {
+		exitWithError(err, errors)
 	}
-	sort.Ints(keys)
 
-	// Iterate map in order
-	for _, ID := range keys {
-		bytes, err := ioutil.ReadFile(cMap[ID])
+	var cKeys []int
+	for key, _ := range eConvMap {
+		cKeys = append(cKeys, key)
+	}
+	sort.Ints(cKeys)
+
+	// Iterate conversations in order.
+	for _, CID := range cKeys {
+		bytes, err := ioutil.ReadFile(eConvMap[CID])
 		if err != nil {
-			log.Printf("Error opening path: %d\n", ID)
+			errors = append(errors, err)
 			continue
 		}
-		exConv := exports.Conversation{}
-		err = json.Unmarshal(bytes, &exConv)
+		eConv := exports.Conversation{}
+		err = json.Unmarshal(bytes, &eConv)
 		if err != nil {
-			log.Print(err)
+			errors = append(errors, err)
 			continue
 		}
-		// Look up the correct profile based on the old user ID.
-		creatorId, ok := importedProfiles[exConv.Author]
+
+		// Look up the author profile based on the old user ID.
+		authorId, ok := pMap[eConv.Author]
 		if !ok {
-			log.Printf("User ID %d does not have a corresponding profile\n")
+			errors = append(errors, fmt.Errorf(
+				"Exported user ID %d does not have an imported profile, skipped conversation %d\n",
+				eConv.Author,
+				CID,
+			))
+			continue
 		}
 
-		// TODO: Look up the correct microcosms ID based on the old Forum ID.
+		// TODO: Type conversion is spurious. Use a different key type.
+		MID, ok := fMap[int(eConv.ForumID)]
+		if !ok {
+			errors = append(errors, fmt.Errorf(
+				"Exported forum ID %d does not have an imported microcosm, skipped conversation %d\n",
+				eConv.ForumID,
+				CID,
+			))
+		}
+
 		c := Conversation{
-			MicrocosmID: 1,
-			Title:       exConv.Name,
-			Created:     exConv.DateCreated,
-			CreatedBy:   creatorId,
-			ViewCount:   exConv.ViewCount,
+			MicrocosmID: MID,
+			Title:       eConv.Name,
+			Created:     eConv.DateCreated,
+			CreatedBy:   authorId,
+			ViewCount:   eConv.ViewCount,
 			IsSticky:    false,
 			IsOpen:      true,
 			IsDeleted:   false,
 			IsModerated: false,
 			IsVisible:   true,
 		}
-		_, err = StoreConversation(db, c)
+		iCID, err := StoreConversation(db, c)
 		if err != nil {
-			log.Print(err)
+			errors = append(errors, err)
+			continue
+		}
+		err = RecordImport(db, originId, ItemTypeConversation, eConv.ID, iCID)
+		if err != nil {
+			errors = append(errors, err)
+			continue
 		}
 	}
 
