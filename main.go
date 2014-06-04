@@ -14,7 +14,22 @@ import (
 	"time"
 )
 
+func exitWithError(fatal error, errors []error) {
+	if len(errors) > 0 {
+		log.Print("Encountered errors while importing:")
+		for _, err := range errors {
+			log.Print(err)
+		}
+	}
+	log.Print("Fatal error:")
+	log.Fatal(fatal)
+}
+
 func main() {
+
+	// Collect non-fatal errors to print at the end.
+	var errors []error
+
 	connString := fmt.Sprintf("user=%s dbname=%s host=%s port=%d password=%s sslmode=disable",
 		config.DbUser, config.DbName, config.DbHost, config.DbPort, config.DbPass)
 	db, err := sql.Open("postgres", connString)
