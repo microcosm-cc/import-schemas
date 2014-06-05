@@ -6,12 +6,21 @@ import (
 	"fmt"
 	_ "github.com/lib/pq"
 	exports "github.com/microcosm-cc/export-schemas/go/forum"
+	"github.com/microcosm-cc/import-schemas/accounting"
 	"github.com/microcosm-cc/import-schemas/config"
 	"github.com/microcosm-cc/import-schemas/walk"
 	"io/ioutil"
 	"log"
 	"sort"
 	"time"
+)
+
+const (
+	ItemTypeMicrocosm    int64 = 2
+	ItemTypeProfile      int64 = 3
+	ItemTypeComment      int64 = 4
+	ItemTypeConversation int64 = 6
+	ItemTypeUser         int64 = 14
 )
 
 func exitWithError(fatal error, errors []error) {
@@ -68,58 +77,19 @@ func main() {
 	log.Printf("Owner profile ID: %d\n", iProfileId)
 
 	// Create an import origin.
-	originId, err := CreateImportOrigin(db, site.Title, iSiteId)
+	originId, err := accounting.CreateImportOrigin(db, site.Title, iSiteId)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Record the import of the site owner.
-	err = RecordImport(db, originId, ItemTypeUser, eOwner.ID, iOwnerId)
+	err = accounting.RecordImport(db, originId, ItemTypeUser, eOwner.ID, iOwnerId)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Print("Importing users...")
-	// Map imported User ID to new Profile ID.
-	pMap := make(map[int64]int64)
-	// Import the remaining users and create a profile for each.
-	for idx, user := range eUsers {
-
-		iUserId, err := StoreUser(db, user)
-		if err != nil {
-			errors = append(errors, err)
-			continue
-		}
-
-		err = RecordImport(db, originId, ItemTypeUser, user.ID, iUserId)
-		if err != nil {
-			errors = append(errors, err)
-			continue
-		}
-
-		// Create a corresponding profile for the user.
-		avatarUrl := sql.NullString{
-			String: "/api/v1/files/66cca61feb8001cb71a9fb7062ff94c9d2543340",
-			Valid:  true,
-		}
-		profile := Profile{
-			SiteId:            iSiteId,
-			UserId:            iUserId,
-			ProfileName:       user.Name,
-			AvatarUrlNullable: avatarUrl,
-		}
-		iProfileID, err := StoreProfile(db, profile)
-		if err != nil {
-			errors = append(errors, err)
-			continue
-		}
-		pMap[user.ID] = iProfileID
-
-		if idx%10 == 0 {
-			fmt.Printf(".")
-		}
-	}
-	fmt.Print("\n")
+	pMap, pErrors := StoreUsers(db, originId, iSiteId, eUsers)
+	errors = append(errors, pErrors...)
 
 	// Forums
 	log.Print("Importing forums...")
@@ -168,7 +138,7 @@ func main() {
 			errors = append(errors, err)
 			continue
 		}
-		err = RecordImport(db, originId, ItemTypeMicrocosm, eForum.ID, MID)
+		err = accounting.RecordImport(db, originId, ItemTypeMicrocosm, eForum.ID, MID)
 		if err != nil {
 			errors = append(errors, err)
 			continue
@@ -242,7 +212,7 @@ func main() {
 			errors = append(errors, err)
 			continue
 		}
-		err = RecordImport(db, originId, ItemTypeConversation, eConv.ID, iCID)
+		err = accounting.RecordImport(db, originId, ItemTypeConversation, eConv.ID, iCID)
 		if err != nil {
 			errors = append(errors, err)
 			continue

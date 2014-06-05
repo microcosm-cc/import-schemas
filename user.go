@@ -3,7 +3,9 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	exports "github.com/microcosm-cc/export-schemas/go/forum"
+	"github.com/microcosm-cc/import-schemas/accounting"
 	"io/ioutil"
 	"log"
 	"os"
@@ -102,4 +104,50 @@ func StoreUser(db *sql.DB, user exports.User) (userId int64, err error) {
 	}
 	err = tx.Commit()
 	return
+}
+
+func StoreUsers(db *sql.DB, iSiteId int64, originId int64, eUsers []exports.User) (pMap map[int64]int64, errors []error) {
+
+	log.Print("Importing users...")
+
+	// Import users and create a profile for each.
+	for idx, user := range eUsers {
+
+		iUserId, err := StoreUser(db, user)
+		if err != nil {
+			errors = append(errors, err)
+			continue
+		}
+
+		err = accounting.RecordImport(db, originId, ItemTypeUser, user.ID, iUserId)
+		if err != nil {
+			errors = append(errors, err)
+			continue
+		}
+
+		// Create a corresponding profile for the user.
+		avatarUrl := sql.NullString{
+			String: "/api/v1/files/66cca61feb8001cb71a9fb7062ff94c9d2543340",
+			Valid:  true,
+		}
+		profile := Profile{
+			SiteId:            iSiteId,
+			UserId:            iUserId,
+			ProfileName:       user.Name,
+			AvatarUrlNullable: avatarUrl,
+		}
+		iProfileID, err := StoreProfile(db, profile)
+		if err != nil {
+			errors = append(errors, err)
+			continue
+		}
+		pMap[user.ID] = iProfileID
+
+		if idx%10 == 0 {
+			fmt.Printf(".")
+		}
+	}
+	fmt.Print("\n")
+
+	return pMap, errors
 }
