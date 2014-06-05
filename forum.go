@@ -2,6 +2,13 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
+	exports "github.com/microcosm-cc/export-schemas/go/forum"
+	"github.com/microcosm-cc/import-schemas/accounting"
+	"github.com/microcosm-cc/import-schemas/walk"
+	"io/ioutil"
+	"log"
+	"sort"
 	"time"
 )
 
@@ -45,4 +52,64 @@ func StoreMicrocosm(db *sql.DB, m Microcosm) (int64, error) {
 	}
 	err = tx.Commit()
 	return microcosmID, err
+}
+
+func ImportForums(db *sql.DB, rootpath string, iSiteId int64, iProfileId int64, originId int64) (fMap map[int]int64, errors []error) {
+
+	// Forums
+	log.Print("Importing forums...")
+
+	eForumMap, err := walk.WalkExports(rootpath, "forums")
+	if err != nil {
+		exitWithError(err, errors)
+	}
+	var fKeys []int
+	for key, _ := range eForumMap {
+		fKeys = append(fKeys, key)
+	}
+	sort.Ints(fKeys)
+
+	for _, FID := range fKeys {
+		bytes, err := ioutil.ReadFile(eForumMap[FID])
+		if err != nil {
+			errors = append(errors, err)
+			continue
+		}
+		eForum := exports.Forum{}
+		err = json.Unmarshal(bytes, &eForum)
+		if err != nil {
+			errors = append(errors, err)
+			continue
+		}
+
+		// CreatedBy and OwnedBy are assumed to be the site owner.
+		m := Microcosm{
+			SiteId:      iSiteId,
+			Title:       eForum.Name,
+			Description: eForum.Text,
+			Created:     time.Now(),
+			CreatedBy:   iProfileId,
+			OwnedBy:     iProfileId,
+			IsOpen:      eForum.Open,
+			IsSticky:    eForum.Sticky,
+			IsModerated: eForum.Moderated,
+			IsDeleted:   eForum.Deleted,
+			IsVisible:   true,
+		}
+		MID, err := StoreMicrocosm(db, m)
+		if err != nil {
+			errors = append(errors, err)
+			continue
+		}
+		err = accounting.RecordImport(db, originId, ItemTypeMicrocosm, eForum.ID, MID)
+		if err != nil {
+			errors = append(errors, err)
+			continue
+		}
+
+		fMap[FID] = MID
+		log.Printf("Created microcosm: %d\n", MID)
+	}
+
+	return fMap, errors
 }
