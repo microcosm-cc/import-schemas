@@ -1,15 +1,7 @@
-package main
+package accounting
 
 import (
 	"database/sql"
-)
-
-const (
-	ItemTypeMicrocosm    int64 = 2
-	ItemTypeProfile      int64 = 3
-	ItemTypeComment      int64 = 4
-	ItemTypeConversation int64 = 6
-	ItemTypeUser         int64 = 14
 )
 
 func CreateImportOrigin(db *sql.DB, title string, siteId int64) (int64, error) {
