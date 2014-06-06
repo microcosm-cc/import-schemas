@@ -4,15 +4,17 @@ import (
 	"database/sql"
 )
 
+// Profile struct
 type Profile struct {
 	ProfileName       string
-	SiteId            int64
-	UserId            int64
-	ProfileId         int64
-	AvatarIdNullable  sql.NullInt64
-	AvatarUrlNullable sql.NullString
+	SiteID            int64
+	UserID            int64
+	ProfileID         int64
+	AvatarIDNullable  sql.NullInt64
+	AvatarURLNullable sql.NullString
 }
 
+// StoreProfile puts a profile into the database
 func StoreProfile(tx *sql.Tx, profile Profile) (profileID int64, err error) {
 
 	err = tx.QueryRow(`
@@ -23,10 +25,10 @@ INSERT INTO profiles (
     $1, $2, $3, true,
     1, NOW(), NOW(), NULL, $4
 ) RETURNING profile_id;`,
-		profile.SiteId,
-		profile.UserId,
+		profile.SiteID,
+		profile.UserID,
 		profile.ProfileName,
-		profile.AvatarUrlNullable,
+		profile.AvatarURLNullable,
 	).Scan(
 		&profileID,
 	)

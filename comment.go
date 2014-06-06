@@ -5,11 +5,12 @@ import (
 	"time"
 )
 
+// Comment struct
 type Comment struct {
-	CommentId       int64
-	ItemTypeId      int64
-	ItemId          int64
-	ProfileId       int64
+	CommentID       int64
+	ItemTypeID      int64
+	ItemID          int64
+	ProfileID       int64
 	Created         time.Time
 	InReplyTo       int64
 	IsVisible       bool
@@ -18,10 +19,11 @@ type Comment struct {
 	AttachmentCount int64
 }
 
+// CommentRevision struct
 type CommentRevision struct {
-	RevisionId int64
-	CommentId  int64
-	ProfileId  int64
+	RevisionID int64
+	CommentID  int64
+	ProfileID  int64
 	Raw        string
 	HTML       string
 	Created    time.Time
@@ -86,6 +88,8 @@ func ImportComments() {
 
 }
 */
+
+// StoreComment puts a single comment into the datavase
 func StoreComment(db *sql.DB, c Comment) (int64, error) {
 
 	tx, err := db.Begin()
@@ -107,4 +111,5 @@ func StoreComment(db *sql.DB, c Comment) (int64, error) {
 
 }
 
+// StoreRevision is not yet implemented
 func StoreRevision() {}

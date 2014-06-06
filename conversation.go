@@ -18,8 +18,9 @@ import (
 	"github.com/microcosm-cc/import-schemas/walk"
 )
 
+// Conversation struct
 type Conversation struct {
-	ConversationId int64
+	ConversationID int64
 	MicrocosmID    int64
 	Title          string
 	Created        time.Time
@@ -36,7 +37,14 @@ type Conversation struct {
 	ViewCount      int64
 }
 
-func ImportConversations(rootpath string, iSiteID int64, originID int64) (errors []error) {
+// ImportConversations walks the tree importing each conversation
+func ImportConversations(
+	rootpath string,
+	siteID int64,
+	originID int64,
+) (
+	errors []error,
+) {
 
 	eConvMap, err := walk.WalkExports(rootpath, "conversations")
 	if err != nil {
@@ -136,6 +144,7 @@ func ImportConversations(rootpath string, iSiteID int64, originID int64) (errors
 	return
 }
 
+// StoreConversation puts a conversation into the database
 func StoreConversation(tx *sql.Tx, c Conversation) (cID int64, err error) {
 
 	err = tx.QueryRow(`

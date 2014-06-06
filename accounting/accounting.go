@@ -95,28 +95,28 @@ INSERT into imported_items (
 func updateStateMap(
 	itemTypeID int64,
 	oldID int64,
-	newId int64,
+	newID int64,
 ) {
 
 	switch itemTypeID {
 	case h.ItemTypes[h.ItemTypeMicrocosm]:
 		microcosmsLock.Lock()
-		microcosms[oldID] = newId
+		microcosms[oldID] = newID
 		microcosmsLock.Unlock()
 
 	case h.ItemTypes[h.ItemTypeProfile]:
 		profilesLock.Lock()
-		profiles[oldID] = newId
+		profiles[oldID] = newID
 		profilesLock.Unlock()
 
 	case h.ItemTypes[h.ItemTypeConversation]:
 		conversationsLock.Lock()
-		conversations[oldID] = newId
+		conversations[oldID] = newID
 		conversationsLock.Unlock()
 
 	case h.ItemTypes[h.ItemTypeComment]:
 		commentsLock.Lock()
-		comments[oldID] = newId
+		comments[oldID] = newID
 		commentsLock.Unlock()
 
 	default:
@@ -137,32 +137,32 @@ func GetNewID(
 	switch itemTypeID {
 	case h.ItemTypes[h.ItemTypeMicrocosm]:
 		microcosmsLock.Lock()
-		if newId, ok := microcosms[oldID]; ok {
-			itemID = newId
+		if newID, ok := microcosms[oldID]; ok {
+			itemID = newID
 		}
 		microcosmsLock.Unlock()
 		return itemID
 
 	case h.ItemTypes[h.ItemTypeProfile]:
 		profilesLock.Lock()
-		if newId, ok := profiles[oldID]; ok {
-			itemID = newId
+		if newID, ok := profiles[oldID]; ok {
+			itemID = newID
 		}
 		profilesLock.Unlock()
 		return itemID
 
 	case h.ItemTypes[h.ItemTypeConversation]:
 		conversationsLock.Lock()
-		if newId, ok := conversations[oldID]; ok {
-			itemID = newId
+		if newID, ok := conversations[oldID]; ok {
+			itemID = newID
 		}
 		conversationsLock.Unlock()
 		return itemID
 
 	case h.ItemTypes[h.ItemTypeComment]:
 		commentsLock.Lock()
-		if newId, ok := comments[oldID]; ok {
-			itemID = newId
+		if newID, ok := comments[oldID]; ok {
+			itemID = newID
 		}
 		commentsLock.Unlock()
 		return itemID

@@ -17,10 +17,11 @@ import (
 	"github.com/microcosm-cc/import-schemas/walk"
 )
 
+// Microcosm struct
 type Microcosm struct {
 	Title       string
 	Description string
-	SiteId      int64
+	SiteID      int64
 	Created     time.Time
 	CreatedBy   int64
 	OwnedBy     int64
@@ -31,6 +32,7 @@ type Microcosm struct {
 	IsVisible   bool
 }
 
+// StoreMicrocosm puts an individual microcosm into the database
 func StoreMicrocosm(tx *sql.Tx, m Microcosm) (int64, error) {
 
 	var microcosmID int64
@@ -45,7 +47,7 @@ INSERT INTO microcosms (
 ) RETURNING microcosm_id;`,
 		m.Title,
 		m.Description,
-		m.SiteId,
+		m.SiteID,
 		m.CreatedBy,
 		m.OwnedBy,
 
@@ -61,11 +63,13 @@ INSERT INTO microcosms (
 	return microcosmID, err
 }
 
+// ImportForums iterates a the export directory, storing each forums
+// individually
 func ImportForums(
 	rootpath string,
-	iSiteId int64,
-	iProfileId int64,
-	originId int64,
+	siteID int64,
+	adminID int64,
+	originID int64,
 ) (
 	errors []error,
 ) {
@@ -78,7 +82,7 @@ func ImportForums(
 		exitWithError(err, errors)
 	}
 	var fKeys []int
-	for key, _ := range eForumMap {
+	for key := range eForumMap {
 		fKeys = append(fKeys, key)
 	}
 	sort.Ints(fKeys)
@@ -110,12 +114,12 @@ func ImportForums(
 
 		// CreatedBy and OwnedBy are assumed to be the site owner.
 		m := Microcosm{
-			SiteId:      iSiteId,
+			SiteID:      siteID,
 			Title:       eForum.Name,
 			Description: eForum.Text,
 			Created:     time.Now(),
-			CreatedBy:   iProfileId,
-			OwnedBy:     iProfileId,
+			CreatedBy:   adminID,
+			OwnedBy:     adminID,
 			IsOpen:      eForum.Open,
 			IsSticky:    eForum.Sticky,
 			IsModerated: eForum.Moderated,
@@ -129,7 +133,7 @@ func ImportForums(
 		}
 		err = accounting.RecordImport(
 			tx,
-			originId,
+			originID,
 			h.ItemTypes[h.ItemTypeMicrocosm],
 			eForum.ID,
 			MID,

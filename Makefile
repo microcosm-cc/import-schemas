@@ -40,3 +40,7 @@ clean:
 
 install: clean
 	go install
+
+race: clean fmt vet test
+	go build -race
+	mv import-schemas $(GOPATH)/bin/

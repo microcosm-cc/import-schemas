@@ -11,19 +11,21 @@ import (
 	"github.com/microcosm-cc/import-schemas/config"
 )
 
+// Site struct
 type Site struct {
 	Title              string
 	SubdomainKey       string
-	ThemeId            int64
+	ThemeID            int64
 	DomainNullable     string
 	Description        string
-	LogoUrl            string
-	BackgroundUrl      string
+	LogoURL            string
+	BackgroundURL      string
 	BackgroundPosition string
 	BackgroundColor    string
 	LinkColor          string
 }
 
+// CreateSiteAndAdminUser will either create or fetch the admin user and site
 func CreateSiteAndAdminUser(
 	owner exports.User,
 ) (
@@ -57,7 +59,7 @@ func CreateSiteAndAdminUser(
 			Title:        config.SiteName,
 			SubdomainKey: config.SiteSubdomainKey,
 			Description:  config.SiteDesc,
-			ThemeId:      1,
+			ThemeID:      1,
 		})
 		if err != nil {
 			log.Fatal(err)
@@ -134,6 +136,7 @@ func CreateSiteAndAdminUser(
 	return originID, siteID, adminID
 }
 
+// GetExistingSiteAndAdmin fetches an existing site, matching on the subdomain
 func GetExistingSiteAndAdmin(
 	subdomainKey string,
 ) (
@@ -167,6 +170,7 @@ SELECT site_id
 	return
 }
 
+// GetImportInProgress looks up the site in the import_origins table
 func GetImportInProgress(
 	siteID int64,
 	originTitle string,
@@ -197,13 +201,14 @@ SELECT origin_id
 	return
 }
 
+// CreateOwnedSite creates a site and returns that and the admin profile
 func CreateOwnedSite(
 	ownerName string,
-	userId int64,
+	userID int64,
 	site Site,
 ) (
-	siteId int64,
-	profileId int64,
+	siteID int64,
+	profileID int64,
 	err error,
 ) {
 	db, err := h.GetConnection()
@@ -214,7 +219,7 @@ func CreateOwnedSite(
 	// Create simple profile for site owner.
 	profile := Profile{
 		ProfileName: ownerName,
-		UserId:      userId,
+		UserID:      userID,
 	}
 
 	err = db.QueryRow(`
@@ -227,23 +232,23 @@ SELECT new_ids.new_site_id
        ) AS new_ids`,
 		site.Title,
 		site.SubdomainKey,
-		site.ThemeId,
-		userId,
+		site.ThemeID,
+		userID,
 		profile.ProfileName,
 
-		profile.AvatarIdNullable,
-		profile.AvatarUrlNullable,
+		profile.AvatarIDNullable,
+		profile.AvatarURLNullable,
 		site.DomainNullable,
 		site.Description,
-		site.LogoUrl,
+		site.LogoURL,
 
-		site.BackgroundUrl,
+		site.BackgroundURL,
 		site.BackgroundPosition,
 		site.BackgroundColor,
 		site.LinkColor,
 	).Scan(
-		&siteId,
-		&profileId,
+		&siteID,
+		&profileID,
 	)
 	if err != nil {
 		log.Fatal(err)

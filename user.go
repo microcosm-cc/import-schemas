@@ -38,8 +38,8 @@ func storeID(itemType string, path string, itemMap map[int]string) {
 	itemMap[ID] = path
 }
 
-// Loads all users from JSON files into exports.User structs and returns the
-// owner separately.
+// LoadUsers from JSON files into exports.User structs and returns the owner
+// (as specified in the config file) separately.
 func LoadUsers(
 	rootpath string,
 	ownerID int64,
@@ -68,7 +68,7 @@ func LoadUsers(
 	filepath.Walk(path.Join(rootpath, usersPath), walkFunc)
 
 	var keys []int
-	for key, _ := range userMap {
+	for key := range userMap {
 		keys = append(keys, key)
 	}
 	sort.Ints(keys)
@@ -97,7 +97,9 @@ func LoadUsers(
 	return
 }
 
-// Stores a single user, but does not create an associated profile.
+// StoreUser stores a single user, but does not create an associated profile.
+// If an existing user is found in Microcosm with the same email address, we
+// return that
 func StoreUser(tx *sql.Tx, user exports.User) (int64, error) {
 
 	var userID int64
@@ -136,8 +138,9 @@ INSERT INTO users (
 	return userID, err
 }
 
+// StoreUsers iterates a range of exports.Users and imports each individually
 func StoreUsers(
-	iSiteID int64,
+	siteID int64,
 	originID int64,
 	eUsers []exports.User,
 ) (
@@ -168,22 +171,22 @@ func StoreUsers(
 		}
 		defer tx.Rollback()
 
-		iUserID, err := StoreUser(tx, user)
+		userID, err := StoreUser(tx, user)
 		if err != nil {
 			errors = append(errors, err)
 			continue
 		}
 
 		// Create a corresponding profile for the user.
-		avatarUrl := sql.NullString{
+		avatarURL := sql.NullString{
 			String: "/api/v1/files/66cca61feb8001cb71a9fb7062ff94c9d2543340",
 			Valid:  true,
 		}
 		profile := Profile{
-			SiteId:            iSiteID,
-			UserId:            iUserID,
+			SiteID:            siteID,
+			UserID:            userID,
 			ProfileName:       user.Name,
-			AvatarUrlNullable: avatarUrl,
+			AvatarURLNullable: avatarURL,
 		}
 		iProfileID, err := StoreProfile(tx, profile)
 		if err != nil {
