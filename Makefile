@@ -11,10 +11,11 @@
 #
 #   install:      Builds, tests and installs the code locally
 
-# Sub-directories containing cod to be vetted or linted
+# Sub-directories containing code to be vetted or linted
 CODE = accounting config walk
 
 # The first target is always the default action if `make` is called without args
+# We clean, build and install into $GOPATH so that it can just be run
 all: clean fmt vet test install
 
 fmt:

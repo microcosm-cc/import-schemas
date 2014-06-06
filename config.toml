@@ -12,5 +12,5 @@ subdomain_key = lfgssimport
 owner_id = 1
 
 [export]
-rootpath = /home/matt/dev/exports/exported
+rootpath = ./exported
 
