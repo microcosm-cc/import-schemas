@@ -138,6 +138,15 @@ func StoreUsers(
 
 		bar.Increment()
 
+		// Skip when it already exists
+		if accounting.ImportedItemID(
+			h.ItemTypes[h.ItemTypeUser],
+			originID,
+			user.ID,
+		) > 0 {
+			continue
+		}
+
 		tx, err := h.GetTransaction()
 		if err != nil {
 			return

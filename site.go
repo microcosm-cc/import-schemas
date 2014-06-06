@@ -31,16 +31,16 @@ func CreateSiteAndAdminUser(
 	siteID int64,
 	adminID int64,
 ) {
-	tx, err := h.GetTransaction()
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer tx.Rollback()
-
 	// Get the site if it exists
 	siteCreatedByUs := false
-	siteID, adminID = GetExistingSiteAndAdmin(tx, config.SiteSubdomainKey)
+	siteID, adminID = GetExistingSiteAndAdmin(config.SiteSubdomainKey)
 	if siteID == 0 {
+		tx, err := h.GetTransaction()
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer tx.Rollback()
+
 		// Doesn't exist, so create the admin user
 		userID, err := StoreUser(tx, owner)
 		if err != nil {
@@ -54,6 +54,11 @@ func CreateSiteAndAdminUser(
 			Description:  config.SiteDesc,
 			ThemeId:      1,
 		})
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		err = tx.Commit()
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -80,7 +85,13 @@ func CreateSiteAndAdminUser(
 		)
 	}
 
-	originID = GetImportInProgress(tx, siteID, config.SiteName)
+	tx, err := h.GetTransaction()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer tx.Rollback()
+
+	originID = GetImportInProgress(siteID, config.SiteName)
 	if originID == 0 {
 		// Create an import origin.
 		originID, err = accounting.CreateImportOrigin(tx, config.SiteName, siteID)
@@ -90,6 +101,8 @@ func CreateSiteAndAdminUser(
 		log.Println("Commencing import")
 	} else {
 		log.Println("Resuming import")
+
+		accounting.LoadPriorImports(originID)
 	}
 
 	if siteCreatedByUs {
@@ -106,24 +119,28 @@ func CreateSiteAndAdminUser(
 		}
 	}
 
-	// Finalise the site creation and import initialisation
 	err = tx.Commit()
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// Finalise the site creation and import initialisation
+
 	return originID, siteID, adminID
 }
 
 func GetExistingSiteAndAdmin(
-	tx *sql.Tx,
 	subdomainKey string,
 ) (
 	siteID int64,
 	adminID int64,
 ) {
+	db, err := h.GetConnection()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	err := tx.QueryRow(`
+	err = db.QueryRow(`
 SELECT site_id
       ,owned_by
   FROM sites
@@ -134,36 +151,42 @@ SELECT site_id
 		&siteID,
 		&adminID,
 	)
-	if err != nil {
+
+	switch {
+	case err == sql.ErrNoRows:
+		return
+	case err != nil:
 		log.Fatal(err)
 	}
-
 	return
 }
 
 func GetImportInProgress(
-	tx *sql.Tx,
 	siteID int64,
 	originTitle string,
 ) (
 	originID int64,
 ) {
-
-	err := tx.QueryRow(`
-SELECT origin_id
-  FROM import_origins
- WHERE site_id = $1
-   AND LOWER(title) = LOWER($2)
-`,
-		siteID,
-		originTitle,
-	).Scan(
-		&originID,
-	)
+	db, err := h.GetConnection()
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	err = db.QueryRow(`
+SELECT origin_id
+  FROM import_origins
+ WHERE site_id = $1`,
+		siteID,
+	).Scan(
+		&originID,
+	)
+
+	switch {
+	case err == sql.ErrNoRows:
+		return
+	case err != nil:
+		log.Fatal(err)
+	}
 	return
 }
 
