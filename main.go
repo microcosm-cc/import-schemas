@@ -7,6 +7,7 @@ import (
 	"log"
 	"sort"
 
+	"github.com/cheggaaa/pb"
 	_ "github.com/lib/pq"
 
 	exports "github.com/microcosm-cc/export-schemas/go/forum"
@@ -60,6 +61,8 @@ func main() {
 	errors = append(errors, fErrors...)
 
 	// Conversations
+	log.Print("Importing conversations...")
+
 	eConvMap, err := walk.WalkExports(config.Rootpath, "conversations")
 	if err != nil {
 		exitWithError(err, errors)
@@ -72,7 +75,11 @@ func main() {
 	sort.Ints(cKeys)
 
 	// Iterate conversations in order.
+	bar := pb.StartNew(len(cKeys))
+
 	for _, CID := range cKeys {
+		bar.Increment()
+
 		bytes, err := ioutil.ReadFile(eConvMap[CID])
 		if err != nil {
 			errors = append(errors, err)
@@ -150,8 +157,11 @@ func main() {
 			continue
 		}
 	}
+	bar.Finish()
 
 	// Load comments.
+	log.Print("Importing comments...")
+
 	eCommMap, err := walk.WalkExports(config.Rootpath, "comments")
 	if err != nil {
 		exitWithError(err, errors)
@@ -163,7 +173,10 @@ func main() {
 	}
 	sort.Ints(commentKeys)
 
+	bar = pb.StartNew(len(commentKeys))
 	for _, CommID := range commentKeys {
+		bar.Increment()
+
 		bytes, err := ioutil.ReadFile(eCommMap[CommID])
 		if err != nil {
 			errors = append(errors, err)
@@ -204,6 +217,7 @@ func main() {
 		// InReplyTo
 		// Store comment.
 	}
+	bar.Finish()
 
 	log.Print(errors)
 }

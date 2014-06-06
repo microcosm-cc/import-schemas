@@ -86,7 +86,7 @@ func ImportForums(
 	}
 	sort.Ints(fKeys)
 
-	bar := pb.StartNew(len(eUsers))
+	bar := pb.StartNew(len(fKeys))
 
 	for _, FID := range fKeys {
 
