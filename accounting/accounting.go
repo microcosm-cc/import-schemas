@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"strings"
 	"sync"
 
 	"github.com/cheggaaa/pb"
@@ -23,10 +22,6 @@ var (
 	conversationsLock sync.Mutex
 	comments          map[int64]int64
 	commentsLock      sync.Mutex
-
-	// Note that this looks up email addresses against userIDs
-	userEmails     map[string]int64
-	userEmailsLock sync.Mutex
 
 	// Note that this actually looks up old userIDs and returns profileIDs
 	profiles     map[int64]int64
@@ -97,16 +92,6 @@ INSERT into imported_items (
 	return nil
 }
 
-func AddUserIDForEmail(email string, userID int64) {
-	userEmailsLock.Lock()
-	userEmails[strings.ToLower(email)] = userID
-	userEmailsLock.Unlock()
-}
-
-func GetUserIDForEmail(email string) (userID int64) {
-	return 0
-}
-
 func updateStateMap(
 	itemTypeID int64,
 	oldID int64,
@@ -118,8 +103,6 @@ func updateStateMap(
 		microcosmsLock.Lock()
 		microcosms[oldID] = newId
 		microcosmsLock.Unlock()
-
-	case h.ItemTypes[h.ItemTypeUser]:
 
 	case h.ItemTypes[h.ItemTypeProfile]:
 		profilesLock.Lock()
@@ -141,56 +124,54 @@ func updateStateMap(
 	}
 }
 
-// ImportedItemID checks if the old_id has already been imported for the given
+// GetNewID checks if the old_id has already been imported for the given
 // item type and returns the new item ID if so.
-func ImportedItemID(
-	itemTypeID int64,
+func GetNewID(
 	originID int64,
+	itemTypeID int64,
 	oldID int64,
-) (
-	itemID int64,
-) {
+) int64 {
+
+	var itemID int64
 
 	switch itemTypeID {
 	case h.ItemTypes[h.ItemTypeMicrocosm]:
 		microcosmsLock.Lock()
 		if newId, ok := microcosms[oldID]; ok {
 			itemID = newId
-			return
 		}
 		microcosmsLock.Unlock()
-
-	case h.ItemTypes[h.ItemTypeUser]:
+		return itemID
 
 	case h.ItemTypes[h.ItemTypeProfile]:
 		profilesLock.Lock()
 		if newId, ok := profiles[oldID]; ok {
 			itemID = newId
-			return
 		}
 		profilesLock.Unlock()
+		return itemID
 
 	case h.ItemTypes[h.ItemTypeConversation]:
 		conversationsLock.Lock()
 		if newId, ok := conversations[oldID]; ok {
 			itemID = newId
-			return
 		}
 		conversationsLock.Unlock()
+		return itemID
 
 	case h.ItemTypes[h.ItemTypeComment]:
 		commentsLock.Lock()
 		if newId, ok := comments[oldID]; ok {
 			itemID = newId
-			return
 		}
 		commentsLock.Unlock()
+		return itemID
 
 	default:
 		log.Fatal(fmt.Errorf("Not yet implemented for %d", itemTypeID))
 	}
 
-	return
+	return itemID
 }
 
 // LoadPriorImports will load all item IDs from the imported_items table for a

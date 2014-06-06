@@ -103,6 +103,21 @@ func StoreUser(tx *sql.Tx, user exports.User) (int64, error) {
 	var userID int64
 
 	err := tx.QueryRow(`
+SELECT user_id
+  FROM users
+ WHERE LOWER(email) = LOWER($1)`,
+		user.Email,
+	).Scan(
+		&userID,
+	)
+	if err != nil && err != sql.ErrNoRows {
+		return userID, err
+	}
+	if userID > 0 {
+		return userID, nil
+	}
+
+	err = tx.QueryRow(`
 INSERT INTO users (
     email, language, created, is_banned, password,
     password_date
@@ -126,12 +141,10 @@ func StoreUsers(
 	originID int64,
 	eUsers []exports.User,
 ) (
-	pMap map[int64]int64,
 	errors []error,
 ) {
 
 	log.Print("Importing users...")
-	pMap = make(map[int64]int64)
 
 	// Import users and create a profile for each.
 	bar := pb.StartNew(len(eUsers))
@@ -140,9 +153,9 @@ func StoreUsers(
 		bar.Increment()
 
 		// Skip when it already exists
-		if accounting.ImportedItemID(
-			h.ItemTypes[h.ItemTypeUser],
+		if accounting.GetNewID(
 			originID,
+			h.ItemTypes[h.ItemTypeProfile],
 			user.ID,
 		) > 0 {
 			continue
@@ -181,9 +194,9 @@ func StoreUsers(
 		err = accounting.RecordImport(
 			tx,
 			originID,
-			h.ItemTypes[h.ItemTypeUser],
+			h.ItemTypes[h.ItemTypeProfile],
 			user.ID,
-			iUserID,
+			iProfileID,
 		)
 		if err != nil {
 			errors = append(errors, err)
@@ -195,12 +208,9 @@ func StoreUsers(
 			errors = append(errors, err)
 			continue
 		}
-
-		pMap[user.ID] = iProfileID
-
 	}
 
 	bar.Finish()
 
-	return pMap, errors
+	return errors
 }

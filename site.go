@@ -115,7 +115,7 @@ func CreateSiteAndAdminUser(
 		err = accounting.RecordImport(
 			tx2,
 			originID,
-			h.ItemTypes[h.ItemTypeUser],
+			h.ItemTypes[h.ItemTypeProfile],
 			owner.ID,
 			adminID,
 		)

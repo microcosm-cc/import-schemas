@@ -45,15 +45,15 @@ func main() {
 	originID, iSiteID, iProfileID := CreateSiteAndAdminUser(eOwner)
 
 	// Import all other users.
-	pMap, pErrors := StoreUsers(iSiteID, originID, eUsers)
+	pErrors := StoreUsers(iSiteID, originID, eUsers)
 	errors = append(errors, pErrors...)
 
 	// Import forums.
-	fMap, fErrors := ImportForums(config.Rootpath, iSiteID, iProfileID, originID)
+	fErrors := ImportForums(config.Rootpath, iSiteID, iProfileID, originID)
 	errors = append(errors, fErrors...)
 
 	// Import conversations.
-	_, cErrors := ImportConversations(config.Rootpath, iSiteID, pMap, fMap, originID)
+	cErrors := ImportConversations(config.Rootpath, iSiteID, pMap, fMap, originID)
 	errors = append(errors, cErrors...)
 
 	log.Print(errors)
