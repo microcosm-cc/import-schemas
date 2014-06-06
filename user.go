@@ -4,8 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	exports "github.com/microcosm-cc/export-schemas/go/forum"
-	"github.com/microcosm-cc/import-schemas/accounting"
 	"io/ioutil"
 	"log"
 	"os"
@@ -14,6 +12,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	exports "github.com/microcosm-cc/export-schemas/go/forum"
+	h "github.com/microcosm-cc/microcosm/helpers"
+
+	"github.com/microcosm-cc/import-schemas/accounting"
 )
 
 const usersPath string = "users"
@@ -85,28 +88,28 @@ func LoadUsers(rootpath string, ownerId int64) (owner exports.User, users []expo
 }
 
 // Stores a single user, but does not create an associated profile.
-func StoreUser(db *sql.DB, user exports.User) (userId int64, err error) {
+func StoreUser(tx *sql.Tx, user exports.User) (userId int64, err error) {
 
-	tx, err := db.Begin()
-	defer tx.Rollback()
-	if err != nil {
-		return
-	}
-	err = tx.QueryRow(
-		`INSERT INTO users (email, language, created, is_banned, password, password_date) VALUES ($1, $2, $3, $4, '', NOW()) RETURNING user_id;`,
+	err = tx.QueryRow(`
+INSERT INTO users (
+    email, language, created, is_banned, password,
+    password_date
+) VALUES (
+	$1, $2, $3, $4, '',
+	NOW()
+) RETURNING user_id;`,
 		user.Email,
 		"en-gb",
 		user.DateCreated,
 		user.Banned,
-	).Scan(&userId)
-	if err != nil {
-		return
-	}
-	err = tx.Commit()
+	).Scan(
+		&userId,
+	)
+
 	return
 }
 
-func StoreUsers(db *sql.DB, iSiteId int64, originId int64, eUsers []exports.User) (pMap map[int64]int64, errors []error) {
+func StoreUsers(iSiteID int64, originID int64, eUsers []exports.User) (pMap map[int64]int64, errors []error) {
 
 	log.Print("Importing users...")
 	pMap = make(map[int64]int64)
@@ -114,13 +117,13 @@ func StoreUsers(db *sql.DB, iSiteId int64, originId int64, eUsers []exports.User
 	// Import users and create a profile for each.
 	for _, user := range eUsers {
 
-		iUserId, err := StoreUser(db, user)
+		tx, err := h.GetTransaction()
 		if err != nil {
-			errors = append(errors, err)
-			continue
+			return
 		}
+		defer tx.Rollback()
 
-		err = accounting.RecordImport(db, originId, ItemTypeUser, user.ID, iUserId)
+		iUserID, err := StoreUser(tx, user)
 		if err != nil {
 			errors = append(errors, err)
 			continue
@@ -132,16 +135,35 @@ func StoreUsers(db *sql.DB, iSiteId int64, originId int64, eUsers []exports.User
 			Valid:  true,
 		}
 		profile := Profile{
-			SiteId:            iSiteId,
-			UserId:            iUserId,
+			SiteId:            iSiteID,
+			UserId:            iUserID,
 			ProfileName:       user.Name,
 			AvatarUrlNullable: avatarUrl,
 		}
-		iProfileID, err := StoreProfile(db, profile)
+		iProfileID, err := StoreProfile(tx, profile)
 		if err != nil {
 			errors = append(errors, err)
 			continue
 		}
+
+		err = accounting.RecordImport(
+			tx,
+			originID,
+			h.ItemTypes[h.ItemTypeUser],
+			user.ID,
+			iUserID,
+		)
+		if err != nil {
+			errors = append(errors, err)
+			continue
+		}
+
+		err = tx.Commit()
+		if err != nil {
+			errors = append(errors, err)
+			continue
+		}
+
 		pMap[user.ID] = iProfileID
 
 		fmt.Printf(".")

@@ -25,7 +25,13 @@ func storeID(itemType string, path string, exportsMap map[int]string) {
 	exportsMap[ID] = path
 }
 
-// Walk a directory and build a map of all IDs.
+// WalkExports walks an export subdirectory and builds a map of all identifiers
+// that we can extract from the subdirectories and filenames.
+// i.e. for the path:
+//   comments/321/321/1.json
+// we expect the value:
+//   [3213211]"comments/321/321/1.json"
+// and so on for all paths within the directory structure
 func WalkExports(exportsPath string, itemType string) (exportsMap map[int]string, err error) {
 
 	// Build a map of Item ID -> file path.
