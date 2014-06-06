@@ -89,7 +89,7 @@ func main() {
 	}
 
 	// Import all other users.
-	pMap, pErrors := StoreUsers(db, originId, iSiteId, eUsers)
+	pMap, pErrors := StoreUsers(db, iSiteId, originId, eUsers)
 	errors = append(errors, pErrors...)
 
 	// Import forums.
