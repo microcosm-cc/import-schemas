@@ -36,7 +36,7 @@ type Conversation struct {
 	ViewCount      int64
 }
 
-func ImportConversations(rootpath string, iSiteID int64, pMap map[int64]int64, fMap map[int]int64, originID int64) (cMap map[int]int64, errors []error) {
+func ImportConversations(rootpath string, iSiteID int64, originID int64) (errors []error) {
 
 	eConvMap, err := walk.WalkExports(rootpath, "conversations")
 	if err != nil {
@@ -49,7 +49,6 @@ func ImportConversations(rootpath string, iSiteID int64, pMap map[int64]int64, f
 		cKeys = append(cKeys, key)
 	}
 	sort.Ints(cKeys)
-	cMap = make(map[int]int64)
 
 	bar := pb.StartNew(len(cKeys))
 
@@ -71,8 +70,8 @@ func ImportConversations(rootpath string, iSiteID int64, pMap map[int64]int64, f
 		}
 
 		// Look up the author profile based on the old user ID.
-		authorI, ok := pMap[eConv.Author]
-		if !ok {
+		authorI := accounting.GetNewID(originID, h.ItemTypes[h.ItemTypeProfile], eConv.Author)
+		if authorI == 0 {
 			errors = append(errors, fmt.Errorf(
 				"Exported user ID %d does not have an imported profile, skipped conversation %d\n",
 				eConv.Author,
@@ -81,8 +80,8 @@ func ImportConversations(rootpath string, iSiteID int64, pMap map[int64]int64, f
 			continue
 		}
 
-		MID, ok := fMap[int(eConv.ForumID)]
-		if !ok {
+		MID := accounting.GetNewID(originID, h.ItemTypes[h.ItemTypeMicrocosm], eConv.ForumID)
+		if MID == 0 {
 			errors = append(errors, fmt.Errorf(
 				"Exported forum ID %d does not have an imported microcosm, skipped conversation %d\n",
 				eConv.ForumID,

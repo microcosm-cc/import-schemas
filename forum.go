@@ -67,14 +67,11 @@ func ImportForums(
 	iProfileId int64,
 	originId int64,
 ) (
-	fMap map[int]int64,
 	errors []error,
 ) {
 
 	// Forums
 	log.Print("Importing forums...")
-
-	fMap = make(map[int]int64)
 
 	eForumMap, err := walk.WalkExports(rootpath, "forums")
 	if err != nil {
@@ -147,11 +144,9 @@ func ImportForums(
 			errors = append(errors, err)
 			continue
 		}
-
-		fMap[FID] = MID
 	}
 
 	bar.Finish()
 
-	return fMap, errors
+	return errors
 }

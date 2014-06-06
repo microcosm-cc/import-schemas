@@ -53,7 +53,7 @@ func main() {
 	errors = append(errors, fErrors...)
 
 	// Import conversations.
-	cErrors := ImportConversations(config.Rootpath, iSiteID, pMap, fMap, originID)
+	cErrors := ImportConversations(config.Rootpath, iSiteID, originID)
 	errors = append(errors, cErrors...)
 
 	log.Print(errors)
