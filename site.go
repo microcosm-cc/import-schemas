@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"log"
+	"time"
 
 	exports "github.com/microcosm-cc/export-schemas/go/forum"
 	h "github.com/microcosm-cc/microcosm/helpers"
@@ -72,6 +73,7 @@ func CreateSiteAndAdminUser(
 			siteID,
 			adminID,
 		)
+
 		siteCreatedByUs = true
 	} else {
 		log.Printf(
@@ -85,30 +87,39 @@ func CreateSiteAndAdminUser(
 		)
 	}
 
-	tx, err := h.GetTransaction()
+	tx2, err := h.GetTransaction()
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer tx.Rollback()
+	defer tx2.Rollback()
+
+	if siteCreatedByUs {
+		siteCreatedByUs = WaitForSiteToExist(siteID)
+	}
 
 	originID = GetImportInProgress(siteID, config.SiteName)
+
 	if originID == 0 {
+		log.Println("Commencing import")
 		// Create an import origin.
-		originID, err = accounting.CreateImportOrigin(tx, config.SiteName, siteID)
+		originID, err = accounting.CreateImportOrigin(
+			tx2,
+			config.SiteName,
+			siteID,
+		)
 		if err != nil {
 			log.Fatal(err)
 		}
-		log.Println("Commencing import")
+
 	} else {
 		log.Println("Resuming import")
-
 		accounting.LoadPriorImports(originID)
 	}
 
 	if siteCreatedByUs {
 		// Record the import of the site owner.
 		err = accounting.RecordImport(
-			tx,
+			tx2,
 			originID,
 			h.ItemTypes[h.ItemTypeUser],
 			owner.ID,
@@ -119,7 +130,7 @@ func CreateSiteAndAdminUser(
 		}
 	}
 
-	err = tx.Commit()
+	err = tx2.Commit()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -187,6 +198,7 @@ SELECT origin_id
 	case err != nil:
 		log.Fatal(err)
 	}
+
 	return
 }
 
@@ -241,4 +253,39 @@ SELECT new_ids.new_site_id
 	}
 
 	return
+}
+
+func WaitForSiteToExist(siteID int64) bool {
+
+	var records int
+	var iterations int
+	for records < 1 {
+		iterations++
+
+		db, err := h.GetConnection()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		err = db.QueryRow(`
+SELECT COUNT(*)
+  FROM sites
+ WHERE site_id = $1`,
+			siteID,
+		).Scan(
+			&records,
+		)
+		if err != nil {
+			log.Fatal(err)
+			return false
+		}
+
+		// Wait for the site to exist before continuing
+		if records == 0 {
+			log.Println("Site does not yet exist, sleeping...")
+		}
+		time.Sleep(1 * time.Second)
+	}
+
+	return true
 }
