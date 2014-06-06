@@ -9,6 +9,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/cheggaaa/pb"
+
 	exports "github.com/microcosm-cc/export-schemas/go/forum"
 	h "github.com/microcosm-cc/microcosm/helpers"
 
@@ -49,8 +51,13 @@ func ImportConversations(rootpath string, iSiteID int64, pMap map[int64]int64, f
 	sort.Ints(cKeys)
 	cMap = make(map[int]int64)
 
+	bar := pb.StartNew(len(cKeys))
+
 	// Iterate conversations in order.
 	for _, CID := range cKeys {
+
+		bar.Increment()
+
 		bytes, err := ioutil.ReadFile(eConvMap[CID])
 		if err != nil {
 			errors = append(errors, err)
@@ -126,6 +133,7 @@ func ImportConversations(rootpath string, iSiteID int64, pMap map[int64]int64, f
 			continue
 		}
 	}
+	bar.Finish()
 	return
 }
 

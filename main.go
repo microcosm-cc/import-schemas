@@ -35,8 +35,7 @@ func main() {
 	// Collect non-fatal errors to print at the end.
 	var errors []error
 
-	// Load all users and create a single user entry corresponding to the site
-	// owner.
+	// Load all users and create a single user entry corresponding to the site owner.
 	eOwner, eUsers, err := LoadUsers(config.Rootpath, config.SiteOwnerID)
 	if err != nil {
 		log.Fatal(err)
