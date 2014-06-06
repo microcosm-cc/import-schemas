@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -12,6 +11,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/cheggaaa/pb"
 
 	exports "github.com/microcosm-cc/export-schemas/go/forum"
 	h "github.com/microcosm-cc/microcosm/helpers"
@@ -37,8 +38,16 @@ func storeID(itemType string, path string, itemMap map[int]string) {
 	itemMap[ID] = path
 }
 
-// Loads all users from JSON files into exports.User structs and returns the owner separately.
-func LoadUsers(rootpath string, ownerId int64) (owner exports.User, users []exports.User, err error) {
+// Loads all users from JSON files into exports.User structs and returns the
+// owner separately.
+func LoadUsers(
+	rootpath string,
+	ownerID int64,
+) (
+	owner exports.User,
+	users []exports.User,
+	err error,
+) {
 
 	// Build a map of User ID -> file path.
 	userMap := make(map[int]string)
@@ -78,12 +87,13 @@ func LoadUsers(rootpath string, ownerId int64) (owner exports.User, users []expo
 			continue
 		}
 
-		if exUser.ID == ownerId {
+		if exUser.ID == ownerID {
 			owner = exUser
 		} else {
 			users = append(users, exUser)
 		}
 	}
+
 	return
 }
 
@@ -109,13 +119,23 @@ INSERT INTO users (
 	return
 }
 
-func StoreUsers(iSiteID int64, originID int64, eUsers []exports.User) (pMap map[int64]int64, errors []error) {
+func StoreUsers(
+	iSiteID int64,
+	originID int64,
+	eUsers []exports.User,
+) (
+	pMap map[int64]int64,
+	errors []error,
+) {
 
 	log.Print("Importing users...")
 	pMap = make(map[int64]int64)
 
 	// Import users and create a profile for each.
-	for idx, user := range eUsers {
+	bar := pb.StartNew(len(eUsers))
+	for _, user := range eUsers {
+
+		bar.Increment()
 
 		tx, err := h.GetTransaction()
 		if err != nil {
@@ -167,11 +187,9 @@ func StoreUsers(iSiteID int64, originID int64, eUsers []exports.User) (pMap map[
 
 		pMap[user.ID] = iProfileID
 
-		if idx%10 == 0 {
-			fmt.Printf(".")
-		}
 	}
-	fmt.Print("\n")
+
+	bar.Finish()
 
 	return pMap, errors
 }

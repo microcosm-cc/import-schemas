@@ -2,6 +2,8 @@ package accounting
 
 import (
 	"database/sql"
+
+	h "github.com/microcosm-cc/microcosm/helpers"
 )
 
 // CreateImportOrigin records in Postgres that we are about to start an import
@@ -59,27 +61,60 @@ INSERT into imported_items (
 	return nil
 }
 
-// IsImported checks if the old_id has already been imported for the given item type and
-// returns the new item ID if so.
-func ImportedItemID(db *sql.DB, originID int64, itemTypeID int64, oldID int64) (int64, error) {
+// ImportedItemID checks if the old_id has already been imported for the given
+// item type and returns the new item ID if so.
+func ImportedItemID(
+	originID int64,
+	itemTypeID int64,
+	oldID int64,
+) (
+	itemID int64,
+	err error,
+) {
 
-	var itemID int64
-	err := db.QueryRow(
-		`SELECT item_id FROM imported_items WHERE origin_id = $1 AND item_type_id = $2 AND old_id = $3;`,
+	db, err := h.GetConnection()
+	if err != nil {
+		return
+	}
+
+	err = db.QueryRow(`
+SELECT item_id
+  FROM imported_items
+ WHERE origin_id = $1
+   AND item_type_id = $2
+   AND old_id = $3`,
 		originID,
 		itemTypeID,
 		oldID,
-	).Scan(&itemID)
+	).Scan(
+		&itemID,
+	)
 
-	return itemID, err
+	return
 }
 
-// This will load all item IDs from the imported_items table for a given site ID and item type ID.
+// LoadPriorImports will load all item IDs from the imported_items table for a
+// given site ID and item type ID.
 // Potentially very expensive, use with care.
-func LoadPriorImports(db *sql.DB, originID int64, itemTypeID int64) (IDmap map[int64]int64, err error) {
+func LoadPriorImports(
+	originID int64,
+	itemTypeID int64,
+) (
+	IDmap map[int64]int64,
+	err error,
+) {
 
-	rows, err := db.Query(
-		`SELECT old_id, item_id FROM imported_items WHERE origin_id = $1 AND item_type = $2;`,
+	db, err := h.GetConnection()
+	if err != nil {
+		return
+	}
+
+	rows, err := db.Query(`
+SELECT old_id
+      ,item_id
+ FROM imported_items
+WHERE origin_id = $1
+  AND item_type = $2`,
 		originID,
 		itemTypeID,
 	)
@@ -88,7 +123,7 @@ func LoadPriorImports(db *sql.DB, originID int64, itemTypeID int64) (IDmap map[i
 		if err == sql.ErrNoRows {
 			return IDmap, nil
 		} else {
-			return IDmap, err
+			return
 		}
 	}
 
@@ -101,5 +136,5 @@ func LoadPriorImports(db *sql.DB, originID int64, itemTypeID int64) (IDmap map[i
 	}
 	err = rows.Err()
 
-	return IDmap, err
+	return
 }

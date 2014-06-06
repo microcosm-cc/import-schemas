@@ -22,6 +22,7 @@ func exitWithError(fatal error, errors []error) {
 }
 
 func main() {
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
 
 	h.InitDBConnection(h.DBConfig{
 		Host:     config.DbHost,

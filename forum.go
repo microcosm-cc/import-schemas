@@ -8,6 +8,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/cheggaaa/pb"
+
 	exports "github.com/microcosm-cc/export-schemas/go/forum"
 	h "github.com/microcosm-cc/microcosm/helpers"
 
@@ -84,7 +86,11 @@ func ImportForums(
 	}
 	sort.Ints(fKeys)
 
+	bar := pb.StartNew(len(fKeys))
+
 	for _, FID := range fKeys {
+
+		bar.Increment()
 
 		bytes, err := ioutil.ReadFile(eForumMap[FID])
 		if err != nil {
@@ -143,8 +149,9 @@ func ImportForums(
 		}
 
 		fMap[FID] = MID
-		log.Printf("Created microcosm: %d\n", MID)
 	}
+
+	bar.Finish()
 
 	return fMap, errors
 }
