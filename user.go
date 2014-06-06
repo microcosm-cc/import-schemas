@@ -115,10 +115,11 @@ func StoreUsers(iSiteID int64, originID int64, eUsers []exports.User) (pMap map[
 	pMap = make(map[int64]int64)
 
 	// Import users and create a profile for each.
-	for _, user := range eUsers {
+	for idx, user := range eUsers {
 
 		tx, err := h.GetTransaction()
 		if err != nil {
+			errors = append(errors, err)
 			return
 		}
 		defer tx.Rollback()
@@ -166,7 +167,9 @@ func StoreUsers(iSiteID int64, originID int64, eUsers []exports.User) (pMap map[
 
 		pMap[user.ID] = iProfileID
 
-		fmt.Printf(".")
+		if idx%10 == 0 {
+			fmt.Printf(".")
+		}
 	}
 	fmt.Print("\n")
 
