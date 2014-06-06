@@ -133,7 +133,6 @@ func StoreUsers(
 
 	// Import users and create a profile for each.
 	bar := pb.StartNew(len(eUsers))
-
 	for _, user := range eUsers {
 
 		bar.Increment()
@@ -149,6 +148,7 @@ func StoreUsers(
 
 		tx, err := h.GetTransaction()
 		if err != nil {
+			errors = append(errors, err)
 			return
 		}
 		defer tx.Rollback()
@@ -195,6 +195,7 @@ func StoreUsers(
 		}
 
 		pMap[user.ID] = iProfileID
+
 	}
 
 	bar.Finish()
