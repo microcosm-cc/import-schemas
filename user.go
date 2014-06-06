@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -12,6 +11,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/cheggaaa/pb"
 
 	exports "github.com/microcosm-cc/export-schemas/go/forum"
 	h "github.com/microcosm-cc/microcosm/helpers"
@@ -131,7 +132,11 @@ func StoreUsers(
 	pMap = make(map[int64]int64)
 
 	// Import users and create a profile for each.
+	bar := pb.StartNew(len(eUsers))
+
 	for _, user := range eUsers {
+
+		bar.Increment()
 
 		tx, err := h.GetTransaction()
 		if err != nil {
@@ -181,10 +186,9 @@ func StoreUsers(
 		}
 
 		pMap[user.ID] = iProfileID
-
-		fmt.Printf(".")
 	}
-	fmt.Print("\n")
+
+	bar.Finish()
 
 	return pMap, errors
 }
