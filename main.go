@@ -89,7 +89,8 @@ func main() {
 		authorI, ok := pMap[eConv.Author]
 		if !ok {
 			errors = append(errors, fmt.Errorf(
-				"Exported user ID %d does not have an imported profile, skipped conversation %d\n",
+				"Exported user ID %d does not have an imported profile, "+
+					"skipped conversation %d\n",
 				eConv.Author,
 				CID,
 			))
@@ -99,7 +100,8 @@ func main() {
 		MID, ok := fMap[int(eConv.ForumID)]
 		if !ok {
 			errors = append(errors, fmt.Errorf(
-				"Exported forum ID %d does not have an imported microcosm, skipped conversation %d\n",
+				"Exported forum ID %d does not have an imported microcosm, "+
+					"skipped conversation %d\n",
 				eConv.ForumID,
 				CID,
 			))
@@ -178,18 +180,21 @@ func main() {
 		_, ok := pMap[eComm.Author]
 		if !ok {
 			errors = append(errors, fmt.Errorf(
-				"Exported user ID %d does not have an imported profile, skipped comment %d\n",
+				"Exported user ID %d does not have an imported profile, "+
+					"skipped comment %d\n",
 				eComm.Author,
 				CommID,
 			))
 			continue
 		}
 
-		// Look up the imported conversation ID based on the old ID. Assumes comments are only on conversations.
+		// Look up the imported conversation ID based on the old ID.
+		// Assumes comments are only on conversations.
 		_, ok = eConvMap[int(eComm.Association.OnID)]
 		if !ok {
 			errors = append(errors, fmt.Errorf(
-				"Exported thread ID %d does not have an imported conversation, skipped comment %d\n",
+				"Exported thread ID %d does not have an imported conversation, "+
+					"skipped comment %d\n",
 				eComm.Association.OnID,
 				CommID,
 			))

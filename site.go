@@ -77,7 +77,16 @@ func CreateSiteAndAdminUser(eOwner exports.User) (int64, int64, int64) {
 	return originID, iSiteID, iProfileID
 }
 
-func CreateOwnedSite(tx *sql.Tx, ownerName string, userId int64, site Site) (siteId int64, profileId int64, err error) {
+func CreateOwnedSite(
+	tx *sql.Tx,
+	ownerName string,
+	userId int64,
+	site Site,
+) (
+	siteId int64,
+	profileId int64,
+	err error,
+) {
 
 	// Create simple profile for site owner.
 	profile := Profile{

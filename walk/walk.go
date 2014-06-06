@@ -32,7 +32,13 @@ func storeID(itemType string, path string, exportsMap map[int]string) {
 // we expect the value:
 //   [3213211]"comments/321/321/1.json"
 // and so on for all paths within the directory structure
-func WalkExports(exportsPath string, itemType string) (exportsMap map[int]string, err error) {
+func WalkExports(
+	exportsPath string,
+	itemType string,
+) (
+	exportsMap map[int]string,
+	err error,
+) {
 
 	// Build a map of Item ID -> file path.
 	exportsMap = make(map[int]string)
