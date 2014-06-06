@@ -1,25 +1,20 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
-	_ "github.com/lib/pq"
-	exports "github.com/microcosm-cc/export-schemas/go/forum"
-	"github.com/microcosm-cc/import-schemas/accounting"
-	"github.com/microcosm-cc/import-schemas/config"
-	"github.com/microcosm-cc/import-schemas/walk"
 	"io/ioutil"
 	"log"
 	"sort"
-)
 
-const (
-	ItemTypeMicrocosm    int64 = 2
-	ItemTypeProfile      int64 = 3
-	ItemTypeComment      int64 = 4
-	ItemTypeConversation int64 = 6
-	ItemTypeUser         int64 = 14
+	_ "github.com/lib/pq"
+
+	exports "github.com/microcosm-cc/export-schemas/go/forum"
+	h "github.com/microcosm-cc/microcosm/helpers"
+
+	"github.com/microcosm-cc/import-schemas/accounting"
+	"github.com/microcosm-cc/import-schemas/config"
+	"github.com/microcosm-cc/import-schemas/walk"
 )
 
 func exitWithError(fatal error, errors []error) {
@@ -35,64 +30,33 @@ func exitWithError(fatal error, errors []error) {
 
 func main() {
 
+	h.InitDBConnection(h.DBConfig{
+		Host:     config.DbHost,
+		Port:     config.DbPort,
+		Database: config.DbName,
+		Username: config.DbUser,
+		Password: config.DbPass,
+	})
+
 	// Collect non-fatal errors to print at the end.
 	var errors []error
 
-	connString := fmt.Sprintf("user=%s dbname=%s host=%s port=%d password=%s sslmode=disable",
-		config.DbUser, config.DbName, config.DbHost, config.DbPort, config.DbPass)
-	db, err := sql.Open("postgres", connString)
+	// Load all users and create a single user entry corresponding to the site
+	// owner.
+	eOwner, eUsers, err := LoadUsers(config.Rootpath, config.SiteOwnerID)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Check we have a good connection before doing anything else.
-	err = db.Ping()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Load all users and create a single user entry corresponding to the site owner.
-	eOwner, eUsers, err := LoadUsers(config.Rootpath, config.SiteOwnerId)
-	if err != nil {
-		log.Fatal(err)
-	}
-	iOwnerId, err := StoreUser(db, eOwner)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Use create_owned_site which will create the site and owner's profile.
-	site := Site{
-		Title:        config.SiteName,
-		SubdomainKey: config.SiteSubdomainKey,
-		Description:  config.SiteDesc,
-		ThemeId:      1,
-	}
-	iSiteId, iProfileId, err := CreateOwnedSite(db, eOwner.Name, iOwnerId, site)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("Created new site: %s, ID: %d\n", site.Title, iSiteId)
-	log.Printf("Owner profile ID: %d\n", iProfileId)
-
-	// Create an import origin.
-	originId, err := accounting.CreateImportOrigin(db, site.Title, iSiteId)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Record the import of the site owner.
-	err = accounting.RecordImport(db, originId, ItemTypeUser, eOwner.ID, iOwnerId)
-	if err != nil {
-		log.Fatal(err)
-	}
+	// Create the site and the admin user to initialise the import
+	originID, iSiteID, iProfileID := CreateSiteAndAdminUser(eOwner)
 
 	// Import all other users.
-	pMap, pErrors := StoreUsers(db, originId, iSiteId, eUsers)
+	pMap, pErrors := StoreUsers(originID, iSiteID, eUsers)
 	errors = append(errors, pErrors...)
 
 	// Import forums.
-	fMap, fErrors := ImportForums(db, config.Rootpath, iSiteId, iProfileId, originId)
+	fMap, fErrors := ImportForums(config.Rootpath, iSiteID, iProfileID, originID)
 	errors = append(errors, fErrors...)
 
 	// Conversations
@@ -102,7 +66,7 @@ func main() {
 	}
 
 	var cKeys []int
-	for key, _ := range eConvMap {
+	for key := range eConvMap {
 		cKeys = append(cKeys, key)
 	}
 	sort.Ints(cKeys)
@@ -122,7 +86,7 @@ func main() {
 		}
 
 		// Look up the author profile based on the old user ID.
-		authorId, ok := pMap[eConv.Author]
+		authorI, ok := pMap[eConv.Author]
 		if !ok {
 			errors = append(errors, fmt.Errorf(
 				"Exported user ID %d does not have an imported profile, skipped conversation %d\n",
@@ -145,7 +109,7 @@ func main() {
 			MicrocosmID: MID,
 			Title:       eConv.Name,
 			Created:     eConv.DateCreated,
-			CreatedBy:   authorId,
+			CreatedBy:   authorI,
 			ViewCount:   eConv.ViewCount,
 			IsSticky:    false,
 			IsOpen:      true,
@@ -153,12 +117,32 @@ func main() {
 			IsModerated: false,
 			IsVisible:   true,
 		}
-		iCID, err := StoreConversation(db, c)
+
+		tx, err := h.GetTransaction()
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer tx.Rollback()
+
+		iCID, err := StoreConversation(tx, c)
 		if err != nil {
 			errors = append(errors, err)
 			continue
 		}
-		err = accounting.RecordImport(db, originId, ItemTypeConversation, eConv.ID, iCID)
+
+		err = accounting.RecordImport(
+			tx,
+			originID,
+			h.ItemTypes[h.ItemTypeConversation],
+			eConv.ID,
+			iCID,
+		)
+		if err != nil {
+			errors = append(errors, err)
+			continue
+		}
+
+		err = tx.Commit()
 		if err != nil {
 			errors = append(errors, err)
 			continue
@@ -172,7 +156,7 @@ func main() {
 	}
 
 	var commentKeys []int
-	for key, _ := range eCommMap {
+	for key := range eCommMap {
 		commentKeys = append(commentKeys, key)
 	}
 	sort.Ints(commentKeys)
