@@ -43,18 +43,18 @@ func main() {
 	}
 
 	// Create the site and the admin user to initialise the import
-	originID, iSiteID, iProfileID := CreateSiteAndAdminUser(eOwner)
+	originID, siteID, adminID := CreateSiteAndAdminUser(eOwner)
 
 	// Import all other users.
-	pErrors := StoreUsers(iSiteID, originID, eUsers)
+	pErrors := StoreUsers(siteID, originID, eUsers)
 	errors = append(errors, pErrors...)
 
 	// Import forums.
-	fErrors := ImportForums(config.Rootpath, iSiteID, iProfileID, originID)
+	fErrors := ImportForums(config.Rootpath, siteID, adminID, originID)
 	errors = append(errors, fErrors...)
 
 	// Import conversations.
-	cErrors := ImportConversations(config.Rootpath, iSiteID, originID)
+	cErrors := ImportConversations(config.Rootpath, siteID, originID)
 	errors = append(errors, cErrors...)
 
 	log.Print(errors)

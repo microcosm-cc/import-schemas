@@ -113,7 +113,7 @@ SELECT user_id
 		&userID,
 	)
 	if err != nil && err != sql.ErrNoRows {
-		return userID, err
+		return 0, err
 	}
 	if userID > 0 {
 		return userID, nil
