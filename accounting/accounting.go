@@ -141,7 +141,6 @@ func GetNewID(
 			itemID = newID
 		}
 		microcosmsLock.Unlock()
-		return itemID
 
 	case h.ItemTypes[h.ItemTypeProfile]:
 		profilesLock.Lock()
@@ -149,7 +148,6 @@ func GetNewID(
 			itemID = newID
 		}
 		profilesLock.Unlock()
-		return itemID
 
 	case h.ItemTypes[h.ItemTypeConversation]:
 		conversationsLock.Lock()
@@ -157,7 +155,6 @@ func GetNewID(
 			itemID = newID
 		}
 		conversationsLock.Unlock()
-		return itemID
 
 	case h.ItemTypes[h.ItemTypeComment]:
 		commentsLock.Lock()
@@ -165,7 +162,6 @@ func GetNewID(
 			itemID = newID
 		}
 		commentsLock.Unlock()
-		return itemID
 
 	default:
 		log.Fatal(fmt.Errorf("Not yet implemented for %d", itemTypeID))
