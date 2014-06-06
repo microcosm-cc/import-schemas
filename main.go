@@ -52,7 +52,7 @@ func main() {
 	originID, iSiteID, iProfileID := CreateSiteAndAdminUser(eOwner)
 
 	// Import all other users.
-	pMap, pErrors := StoreUsers(iSiteId, originId, eUsers)
+	pMap, pErrors := StoreUsers(iSiteID, originID, eUsers)
 	errors = append(errors, pErrors...)
 
 	// Import forums.
