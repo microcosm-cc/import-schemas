@@ -59,6 +59,8 @@ func ImportForums(db *sql.DB, rootpath string, iSiteId int64, iProfileId int64, 
 	// Forums
 	log.Print("Importing forums...")
 
+	fMap = make(map[int]int64)
+
 	eForumMap, err := walk.WalkExports(rootpath, "forums")
 	if err != nil {
 		exitWithError(err, errors)

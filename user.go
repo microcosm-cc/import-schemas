@@ -109,9 +109,10 @@ func StoreUser(db *sql.DB, user exports.User) (userId int64, err error) {
 func StoreUsers(db *sql.DB, iSiteId int64, originId int64, eUsers []exports.User) (pMap map[int64]int64, errors []error) {
 
 	log.Print("Importing users...")
+	pMap = make(map[int64]int64)
 
 	// Import users and create a profile for each.
-	for idx, user := range eUsers {
+	for _, user := range eUsers {
 
 		iUserId, err := StoreUser(db, user)
 		if err != nil {
@@ -143,9 +144,7 @@ func StoreUsers(db *sql.DB, iSiteId int64, originId int64, eUsers []exports.User
 		}
 		pMap[user.ID] = iProfileID
 
-		if idx%10 == 0 {
-			fmt.Printf(".")
-		}
+		fmt.Printf(".")
 	}
 	fmt.Print("\n")
 

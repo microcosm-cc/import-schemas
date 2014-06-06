@@ -56,6 +56,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.Printf("Loaded %d users\n", len(eUsers))
 	iOwnerId, err := StoreUser(db, eOwner)
 	if err != nil {
 		log.Fatal(err)
@@ -212,7 +213,7 @@ func main() {
 			continue
 		}
 
-		// TODO: Look up InReplyTo, which we assume is a comment with lower ID
+		// InReplyTo
 		// Store comment.
 	}
 
