@@ -26,9 +26,10 @@ build: clean
 
 vet:
 	go tool vet $(CODE)
+	go tool vet *.go
 
 lint:
-	golint $(CODE) main.go
+	golint $(CODE) *.go
 
 test:
 	go test -v -cover ./...

@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"log"
-	"time"
 
 	exports "github.com/microcosm-cc/export-schemas/go/forum"
 	h "github.com/microcosm-cc/microcosm/helpers"
@@ -36,30 +35,30 @@ func CreateSiteAndAdminUser(
 	siteCreatedByUs := false
 	siteID, adminID = GetExistingSiteAndAdmin(config.SiteSubdomainKey)
 	if siteID == 0 {
+		// Doesn't exist, so create the admin user
 		tx, err := h.GetTransaction()
 		if err != nil {
 			log.Fatal(err)
 		}
 		defer tx.Rollback()
 
-		// Doesn't exist, so create the admin user
 		userID, err := StoreUser(tx, owner)
 		if err != nil {
 			log.Fatal(err)
 		}
 
+		err = tx.Commit()
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		// Use create_owned_site which will create the site and owner's profile.
-		siteID, adminID, err := CreateOwnedSite(tx, owner.Name, userID, Site{
+		siteID, adminID, err = CreateOwnedSite(owner.Name, userID, Site{
 			Title:        config.SiteName,
 			SubdomainKey: config.SiteSubdomainKey,
 			Description:  config.SiteDesc,
 			ThemeId:      1,
 		})
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		err = tx.Commit()
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -93,12 +92,7 @@ func CreateSiteAndAdminUser(
 	}
 	defer tx2.Rollback()
 
-	if siteCreatedByUs {
-		siteCreatedByUs = WaitForSiteToExist(siteID)
-	}
-
 	originID = GetImportInProgress(siteID, config.SiteName)
-
 	if originID == 0 {
 		log.Println("Commencing import")
 		// Create an import origin.
@@ -169,6 +163,7 @@ SELECT site_id
 	case err != nil:
 		log.Fatal(err)
 	}
+
 	return
 }
 
@@ -203,7 +198,6 @@ SELECT origin_id
 }
 
 func CreateOwnedSite(
-	tx *sql.Tx,
 	ownerName string,
 	userId int64,
 	site Site,
@@ -212,6 +206,10 @@ func CreateOwnedSite(
 	profileId int64,
 	err error,
 ) {
+	db, err := h.GetConnection()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Create simple profile for site owner.
 	profile := Profile{
@@ -219,7 +217,7 @@ func CreateOwnedSite(
 		UserId:      userId,
 	}
 
-	err = tx.QueryRow(`
+	err = db.QueryRow(`
 SELECT new_ids.new_site_id
       ,new_ids.new_profile_id
   FROM create_owned_site(
@@ -247,45 +245,9 @@ SELECT new_ids.new_site_id
 		&siteId,
 		&profileId,
 	)
-
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	return
-}
-
-func WaitForSiteToExist(siteID int64) bool {
-
-	var records int
-	var iterations int
-	for records < 1 {
-		iterations++
-
-		db, err := h.GetConnection()
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		err = db.QueryRow(`
-SELECT COUNT(*)
-  FROM sites
- WHERE site_id = $1`,
-			siteID,
-		).Scan(
-			&records,
-		)
-		if err != nil {
-			log.Fatal(err)
-			return false
-		}
-
-		// Wait for the site to exist before continuing
-		if records == 0 {
-			log.Println("Site does not yet exist, sleeping...")
-		}
-		time.Sleep(1 * time.Second)
-	}
-
-	return true
 }

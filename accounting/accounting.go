@@ -61,8 +61,6 @@ INSERT INTO import_origins (
 		return originID, err
 	}
 
-	fmt.Printf("originID: %d\n", originID)
-
 	return originID, nil
 }
 

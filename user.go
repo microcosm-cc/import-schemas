@@ -98,9 +98,11 @@ func LoadUsers(
 }
 
 // Stores a single user, but does not create an associated profile.
-func StoreUser(tx *sql.Tx, user exports.User) (userId int64, err error) {
+func StoreUser(tx *sql.Tx, user exports.User) (int64, error) {
 
-	err = tx.QueryRow(`
+	var userID int64
+
+	err := tx.QueryRow(`
 INSERT INTO users (
     email, language, created, is_banned, password,
     password_date
@@ -113,10 +115,10 @@ INSERT INTO users (
 		user.DateCreated,
 		user.Banned,
 	).Scan(
-		&userId,
+		&userID,
 	)
 
-	return
+	return userID, err
 }
 
 func StoreUsers(
