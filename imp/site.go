@@ -25,14 +25,15 @@ type Site struct {
 	LinkColor          string
 }
 
-// CreateSiteAndAdminUser will either create or fetch the admin user and site
-func CreateSiteAndAdminUser(
+// createSiteAndAdminUser will either create or fetch the admin user and site
+func createSiteAndAdminUser(
 	owner src.Profile,
 ) (
 	originID int64,
 	siteID int64,
-	adminID int64,
 ) {
+	var adminID int64
+
 	// Get the site if it exists
 	siteCreatedByUs := false
 	siteID, adminID = GetExistingSiteAndAdmin(config.SiteSubdomainKey)
@@ -133,7 +134,7 @@ func CreateSiteAndAdminUser(
 
 	// Finalise the site creation and import initialisation
 
-	return originID, siteID, adminID
+	return originID, siteID
 }
 
 // GetExistingSiteAndAdmin fetches an existing site, matching on the subdomain

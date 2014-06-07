@@ -3,6 +3,7 @@ package imp
 import (
 	"log"
 
+	"github.com/microcosm-cc/import-schemas/conc"
 	"github.com/microcosm-cc/import-schemas/config"
 )
 
@@ -15,24 +16,30 @@ func Import() {
 
 	// Load all users and create a single user entry corresponding to the site
 	// owner.
-	eOwner, err := LoadUsers(config.Rootpath, config.SiteOwnerID)
+	eOwner, err := loadUsers(config.Rootpath, config.SiteOwnerID)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Create the site and the admin user to initialise the import
-	originID, siteID, adminID := CreateSiteAndAdminUser(eOwner)
+	originID, siteID := createSiteAndAdminUser(eOwner)
+
+	args := conc.Args{
+		RootPath: config.Rootpath,
+		OriginID: originID,
+		SiteID:   siteID,
+	}
 
 	// Import all other users.
-	pErrors := ImportProfiles(siteID, originID)
+	pErrors := importProfiles(args)
 	errors = append(errors, pErrors...)
 
 	// Import forums.
-	fErrors := ImportForums(config.Rootpath, siteID, adminID, originID)
+	fErrors := importForums(args)
 	errors = append(errors, fErrors...)
 
 	// Import conversations.
-	cErrors := ImportConversations(config.Rootpath, siteID, originID)
+	cErrors := importConversations(args)
 	errors = append(errors, cErrors...)
 
 	log.Print(errors)

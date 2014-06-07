@@ -12,6 +12,7 @@ import (
 	h "github.com/microcosm-cc/microcosm/helpers"
 
 	"github.com/microcosm-cc/import-schemas/accounting"
+	"github.com/microcosm-cc/import-schemas/conc"
 	"github.com/microcosm-cc/import-schemas/files"
 )
 
@@ -34,110 +35,121 @@ type Conversation struct {
 	ViewCount      int64
 }
 
-// ImportConversations walks the tree importing each conversation
-func ImportConversations(
-	rootpath string,
-	siteID int64,
-	originID int64,
-) (
-	errors []error,
-) {
+// importConversations walks the tree importing each conversation
+func importConversations(args conc.Args) (errors []error) {
 
-	var itemTypeID = h.ItemTypes[h.ItemTypeConversation]
+	args.ItemTypeID = h.ItemTypes[h.ItemTypeConversation]
 
 	log.Print("Importing conversations...")
 
-	err := files.WalkExportTree(rootpath, itemTypeID)
+	err := files.WalkExportTree(args.RootPath, args.ItemTypeID)
 	if err != nil {
 		exitWithError(err, errors)
 		return
 	}
 
-	ids := files.GetIDs(itemTypeID)
+	ids := files.GetIDs(args.ItemTypeID)
 
 	bar := pb.StartNew(len(ids))
 
 	// Iterate conversations in order.
-	for _, CID := range ids {
-
+	for _, id := range ids {
+		err := importConversation(args, id)
+		if err != nil {
+			errors = append(errors, err)
+		}
 		bar.Increment()
-
-		eConv := src.Conversation{}
-		err = files.JSONFileToInterface(files.GetPath(itemTypeID, CID), eConv)
-		if err != nil {
-			errors = append(errors, err)
-			continue
-		}
-
-		// Look up the author profile based on the old user ID.
-		authorI := accounting.GetNewID(originID, h.ItemTypes[h.ItemTypeProfile], eConv.Author)
-		if authorI == 0 {
-			errors = append(errors, fmt.Errorf(
-				"Exported user ID %d does not have an imported profile, skipped conversation %d\n",
-				eConv.Author,
-				CID,
-			))
-			continue
-		}
-
-		MID := accounting.GetNewID(originID, h.ItemTypes[h.ItemTypeMicrocosm], eConv.ForumID)
-		if MID == 0 {
-			errors = append(errors, fmt.Errorf(
-				"Exported forum ID %d does not have an imported microcosm, skipped conversation %d\n",
-				eConv.ForumID,
-				CID,
-			))
-		}
-
-		c := Conversation{
-			MicrocosmID: MID,
-			Title:       eConv.Name,
-			Created:     eConv.DateCreated,
-			CreatedBy:   authorI,
-			ViewCount:   eConv.ViewCount,
-			IsSticky:    false,
-			IsOpen:      true,
-			IsDeleted:   false,
-			IsModerated: false,
-			IsVisible:   true,
-		}
-
-		tx, err := h.GetTransaction()
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer tx.Rollback()
-
-		iCID, err := StoreConversation(tx, c)
-		if err != nil {
-			errors = append(errors, err)
-			continue
-		}
-
-		err = accounting.RecordImport(
-			tx,
-			originID,
-			h.ItemTypes[h.ItemTypeConversation],
-			eConv.ID,
-			iCID,
-		)
-		if err != nil {
-			errors = append(errors, err)
-			continue
-		}
-
-		err = tx.Commit()
-		if err != nil {
-			errors = append(errors, err)
-			continue
-		}
 	}
 	bar.Finish()
 	return
 }
 
+// importConversation imports a single conversation or skips it if it has been
+// done aleady
+func importConversation(args conc.Args, itemID int64) error {
+	srcConversation := src.Conversation{}
+	err := files.JSONFileToInterface(
+		files.GetPath(args.ItemTypeID, itemID),
+		srcConversation,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Look up the author profile based on the old user ID.
+	authorI := accounting.GetNewID(
+		args.OriginID,
+		h.ItemTypes[h.ItemTypeProfile],
+		srcConversation.Author,
+	)
+	if authorI == 0 {
+		return fmt.Errorf(
+			"Exported user ID %d does not have an imported profile, "+
+				"skipped conversation %d\n",
+			srcConversation.Author,
+			itemID,
+		)
+	}
+
+	MID := accounting.GetNewID(
+		args.OriginID,
+		h.ItemTypes[h.ItemTypeMicrocosm],
+		srcConversation.ForumID,
+	)
+	if MID == 0 {
+		return fmt.Errorf(
+			"Exported forum ID %d does not have an imported microcosm, "+
+				"skipped conversation %d\n",
+			srcConversation.ForumID,
+			itemID,
+		)
+	}
+
+	c := Conversation{
+		MicrocosmID: MID,
+		Title:       srcConversation.Name,
+		Created:     srcConversation.DateCreated,
+		CreatedBy:   authorI,
+		ViewCount:   srcConversation.ViewCount,
+		IsSticky:    false,
+		IsOpen:      true,
+		IsDeleted:   false,
+		IsModerated: false,
+		IsVisible:   true,
+	}
+
+	tx, err := h.GetTransaction()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer tx.Rollback()
+
+	iCID, err := createConversation(tx, c)
+	if err != nil {
+		return err
+	}
+
+	err = accounting.RecordImport(
+		tx,
+		args.OriginID,
+		args.ItemTypeID,
+		srcConversation.ID,
+		iCID,
+	)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // StoreConversation puts a conversation into the database
-func StoreConversation(tx *sql.Tx, c Conversation) (cID int64, err error) {
+func createConversation(tx *sql.Tx, c Conversation) (cID int64, err error) {
 
 	err = tx.QueryRow(`
 INSERT INTO conversations (

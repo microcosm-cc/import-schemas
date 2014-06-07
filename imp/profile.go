@@ -11,6 +11,7 @@ import (
 	h "github.com/microcosm-cc/microcosm/helpers"
 
 	"github.com/microcosm-cc/import-schemas/accounting"
+	"github.com/microcosm-cc/import-schemas/conc"
 	"github.com/microcosm-cc/import-schemas/files"
 )
 
@@ -24,9 +25,9 @@ type Profile struct {
 	AvatarURLNullable sql.NullString
 }
 
-// LoadUsers from JSON files into src.Profile structs and returns the owner
+// loadUsers from JSON files into src.Profile structs and returns the owner
 // (as specified in the config file) separately.
-func LoadUsers(rootPath string, ownerID int64) (src.Profile, error) {
+func loadUsers(rootPath string, ownerID int64) (src.Profile, error) {
 
 	itemTypeID := h.ItemTypes[h.ItemTypeProfile]
 
@@ -50,6 +51,96 @@ func LoadUsers(rootPath string, ownerID int64) (src.Profile, error) {
 	}
 
 	return owner, nil
+}
+
+// importProfiles iterates a range of src.Users and imports each
+// individually
+func importProfiles(args conc.Args) (errors []error) {
+
+	log.Print("Importing profiles...")
+
+	args.ItemTypeID = h.ItemTypes[h.ItemTypeProfile]
+
+	// Import users and create a profile for each.
+	ids := files.GetIDs(args.ItemTypeID)
+
+	bar := pb.StartNew(len(ids))
+	for _, id := range ids {
+		err := importProfile(args, id)
+		if err != nil {
+			errors = append(errors, err)
+		}
+		bar.Increment()
+	}
+
+	bar.Finish()
+
+	return errors
+}
+
+func importProfile(args conc.Args, itemID int64) error {
+	// Skip when it already exists
+	if accounting.GetNewID(args.OriginID, args.ItemTypeID, itemID) > 0 {
+		return nil
+	}
+
+	// Read profile from disk
+	//
+	// Done here so that if we are resuming and only a few failed we only end up
+	// reading a few things from disk rather than everything.
+	srcProfile := src.Profile{}
+	err := files.JSONFileToInterface(
+		files.GetPath(args.ItemTypeID, itemID),
+		&srcProfile,
+	)
+	if err != nil {
+		return err
+	}
+
+	tx, err := h.GetTransaction()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	userID, err := createUser(tx, srcProfile)
+	if err != nil {
+		return err
+	}
+
+	// Create a corresponding profile for the srcProfile.
+	avatarURL := sql.NullString{
+		String: "/api/v1/files/66cca61feb8001cb71a9fb7062ff94c9d2543340",
+		Valid:  true,
+	}
+	profile := Profile{
+		SiteID:            args.SiteID,
+		UserID:            userID,
+		ProfileName:       srcProfile.Name,
+		AvatarURLNullable: avatarURL,
+	}
+	profileID, err := createProfile(tx, profile)
+	if err != nil {
+		return err
+	}
+
+	err = accounting.RecordImport(
+		tx,
+		args.OriginID,
+		args.ItemTypeID,
+		srcProfile.ID,
+		profileID,
+	)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // createUser stores a single user, but does not create an associated profile.
@@ -113,96 +204,4 @@ INSERT INTO profiles (
 	)
 
 	return
-}
-
-// ImportProfiles iterates a range of src.Users and imports each
-// individually
-func ImportProfiles(
-	siteID int64,
-	originID int64,
-) (
-	errors []error,
-) {
-
-	log.Print("Importing profiles...")
-
-	// Import users and create a profile for each.
-	ids := files.GetIDs(h.ItemTypes[h.ItemTypeProfile])
-
-	bar := pb.StartNew(len(ids))
-	for _, id := range ids {
-		err := importProfile(siteID, originID, id)
-		if err != nil {
-			errors = append(errors, err)
-		}
-		bar.Increment()
-	}
-
-	bar.Finish()
-
-	return errors
-}
-
-func importProfile(siteID int64, originID int64, itemID int64) error {
-	var itemTypeID = h.ItemTypes[h.ItemTypeProfile]
-
-	// Skip when it already exists
-	if accounting.GetNewID(originID, itemTypeID, itemID) > 0 {
-		return nil
-	}
-
-	// Read profile from disk
-	//
-	// Done here so that if we are resuming and only a few failed we only end up
-	// reading a few things from disk rather than everything.
-	srcProfile := src.Profile{}
-	err := files.JSONFileToInterface(files.GetPath(itemTypeID, itemID), &srcProfile)
-	if err != nil {
-		return err
-	}
-
-	tx, err := h.GetTransaction()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	userID, err := createUser(tx, srcProfile)
-	if err != nil {
-		return err
-	}
-
-	// Create a corresponding profile for the srcProfile.
-	avatarURL := sql.NullString{
-		String: "/api/v1/files/66cca61feb8001cb71a9fb7062ff94c9d2543340",
-		Valid:  true,
-	}
-	profile := Profile{
-		SiteID:            siteID,
-		UserID:            userID,
-		ProfileName:       srcProfile.Name,
-		AvatarURLNullable: avatarURL,
-	}
-	profileID, err := createProfile(tx, profile)
-	if err != nil {
-		return err
-	}
-
-	err = accounting.RecordImport(
-		tx,
-		originID,
-		h.ItemTypes[h.ItemTypeProfile],
-		srcProfile.ID,
-		profileID,
-	)
-	if err != nil {
-		return err
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return err
-	}
-
-	return nil
 }

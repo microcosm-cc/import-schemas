@@ -11,6 +11,7 @@ import (
 	h "github.com/microcosm-cc/microcosm/helpers"
 
 	"github.com/microcosm-cc/import-schemas/accounting"
+	"github.com/microcosm-cc/import-schemas/conc"
 	"github.com/microcosm-cc/import-schemas/files"
 )
 
@@ -29,8 +30,99 @@ type Microcosm struct {
 	IsVisible   bool
 }
 
-// StoreMicrocosm puts an individual microcosm into the database
-func StoreMicrocosm(tx *sql.Tx, m Microcosm) (int64, error) {
+// importForums iterates a the export directory, storing each forums
+// individually
+func importForums(args conc.Args) (errors []error) {
+
+	// Forums
+	args.ItemTypeID = h.ItemTypes[h.ItemTypeMicrocosm]
+
+	log.Print("Importing forums...")
+
+	err := files.WalkExportTree(args.RootPath, args.ItemTypeID)
+	if err != nil {
+		exitWithError(err, errors)
+		return
+	}
+
+	ids := files.GetIDs(args.ItemTypeID)
+
+	bar := pb.StartNew(len(ids))
+
+	for _, id := range ids {
+		err := importForum(args, id)
+		if err != nil {
+			errors = append(errors, err)
+		}
+		bar.Increment()
+	}
+
+	bar.Finish()
+
+	return errors
+}
+
+func importForum(args conc.Args, itemID int64) error {
+
+	// Skip when it already exists
+	if accounting.GetNewID(args.OriginID, args.ItemTypeID, itemID) > 0 {
+		return nil
+	}
+
+	srcForum := src.Forum{}
+	err := files.JSONFileToInterface(
+		files.GetPath(args.ItemTypeID, itemID),
+		srcForum,
+	)
+	if err != nil {
+		return err
+	}
+
+	tx, err := h.GetTransaction()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// CreatedBy and OwnedBy are assumed to be the site owner.
+	m := Microcosm{
+		SiteID:      args.SiteID,
+		Title:       srcForum.Name,
+		Description: srcForum.Text,
+		Created:     time.Now(),
+		CreatedBy:   srcForum.Author,
+		OwnedBy:     srcForum.Author,
+		IsOpen:      srcForum.Open,
+		IsSticky:    srcForum.Sticky,
+		IsModerated: srcForum.Moderated,
+		IsDeleted:   srcForum.Deleted,
+		IsVisible:   true,
+	}
+	MID, err := createMicrocosm(tx, m)
+	if err != nil {
+		return err
+	}
+	err = accounting.RecordImport(
+		tx,
+		args.OriginID,
+		args.ItemTypeID,
+		srcForum.ID,
+		MID,
+	)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// createMicrocosm puts an individual microcosm into the database
+func createMicrocosm(tx *sql.Tx, m Microcosm) (int64, error) {
 
 	var microcosmID int64
 
@@ -58,90 +150,4 @@ INSERT INTO microcosms (
 	)
 
 	return microcosmID, err
-}
-
-// ImportForums iterates a the export directory, storing each forums
-// individually
-func ImportForums(
-	rootpath string,
-	siteID int64,
-	adminID int64,
-	originID int64,
-) (
-	errors []error,
-) {
-
-	// Forums
-	var itemTypeID = h.ItemTypes[h.ItemTypeMicrocosm]
-
-	log.Print("Importing forums...")
-
-	err := files.WalkExportTree(rootpath, itemTypeID)
-	if err != nil {
-		exitWithError(err, errors)
-		return
-	}
-
-	ids := files.GetIDs(itemTypeID)
-
-	bar := pb.StartNew(len(ids))
-
-	for _, FID := range ids {
-
-		bar.Increment()
-
-		eForum := src.Forum{}
-		err = files.JSONFileToInterface(files.GetPath(itemTypeID, FID), eForum)
-		if err != nil {
-			errors = append(errors, err)
-			continue
-		}
-
-		tx, err := h.GetTransaction()
-		if err != nil {
-			return
-		}
-		defer tx.Rollback()
-
-		// CreatedBy and OwnedBy are assumed to be the site owner.
-		m := Microcosm{
-			SiteID:      siteID,
-			Title:       eForum.Name,
-			Description: eForum.Text,
-			Created:     time.Now(),
-			CreatedBy:   adminID,
-			OwnedBy:     adminID,
-			IsOpen:      eForum.Open,
-			IsSticky:    eForum.Sticky,
-			IsModerated: eForum.Moderated,
-			IsDeleted:   eForum.Deleted,
-			IsVisible:   true,
-		}
-		MID, err := StoreMicrocosm(tx, m)
-		if err != nil {
-			errors = append(errors, err)
-			continue
-		}
-		err = accounting.RecordImport(
-			tx,
-			originID,
-			h.ItemTypes[h.ItemTypeMicrocosm],
-			eForum.ID,
-			MID,
-		)
-		if err != nil {
-			errors = append(errors, err)
-			continue
-		}
-
-		err = tx.Commit()
-		if err != nil {
-			errors = append(errors, err)
-			continue
-		}
-	}
-
-	bar.Finish()
-
-	return errors
 }
