@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/cheggaaa/pb"
+	//"github.com/cheggaaa/pb"
 
 	src "github.com/microcosm-cc/export-schemas/go/forum"
 	h "github.com/microcosm-cc/microcosm/helpers"
@@ -55,27 +55,19 @@ func loadUsers(rootPath string, ownerID int64) (src.Profile, error) {
 
 // importProfiles iterates a range of src.Users and imports each
 // individually
-func importProfiles(args conc.Args) (errors []error) {
+func importProfiles(args conc.Args, gophers int) (errors []error) {
 
 	log.Print("Importing profiles...")
 
 	args.ItemTypeID = h.ItemTypes[h.ItemTypeProfile]
 
 	// Import users and create a profile for each.
-	ids := files.GetIDs(args.ItemTypeID)
-
-	bar := pb.StartNew(len(ids))
-	for _, id := range ids {
-		err := importProfile(args, id)
-		if err != nil {
-			errors = append(errors, err)
-		}
-		bar.Increment()
-	}
-
-	bar.Finish()
-
-	return errors
+	return conc.RunTasks(
+		files.GetIDs(args.ItemTypeID),
+		args,
+		importProfile,
+		gophers,
+	)
 }
 
 func importProfile(args conc.Args, itemID int64) error {
@@ -103,9 +95,25 @@ func importProfile(args conc.Args, itemID int64) error {
 	}
 	defer tx.Rollback()
 
-	userID, err := createUser(tx, srcProfile)
+	userID, profileID, err := createUser(tx, args.SiteID, srcProfile)
 	if err != nil {
 		return err
+	}
+
+	if profileID > 0 {
+		// createUser reports that the user and a profile already existed
+		err = accounting.RecordImport(
+			tx,
+			args.OriginID,
+			args.ItemTypeID,
+			srcProfile.ID,
+			profileID,
+		)
+		if err != nil {
+			return err
+		}
+
+		return nil
 	}
 
 	// Create a corresponding profile for the srcProfile.
@@ -119,7 +127,7 @@ func importProfile(args conc.Args, itemID int64) error {
 		ProfileName:       srcProfile.Name,
 		AvatarURLNullable: avatarURL,
 	}
-	profileID, err := createProfile(tx, profile)
+	profileID, err = createProfile(tx, profile)
 	if err != nil {
 		return err
 	}
@@ -146,10 +154,9 @@ func importProfile(args conc.Args, itemID int64) error {
 // createUser stores a single user, but does not create an associated profile.
 // If an existing user is found in Microcosm with the same email address, we
 // return that
-func createUser(tx *sql.Tx, user src.Profile) (int64, error) {
-
+func createUser(tx *sql.Tx, siteID int64, user src.Profile) (int64, int64, error) {
+	// We may already have a user record based on this email
 	var userID int64
-
 	err := tx.QueryRow(`
 SELECT user_id
   FROM users
@@ -159,12 +166,37 @@ SELECT user_id
 		&userID,
 	)
 	if err != nil && err != sql.ErrNoRows {
-		return 0, err
+		return 0, 0, err
 	}
 	if userID > 0 {
-		return userID, nil
+		// We have a user record already, but we might also have a profile on
+		// this site for this user
+		if siteID > 0 {
+			var profileID int64
+			err := tx.QueryRow(`
+SELECT profile_id
+  FROM profiles
+ WHERE site_id = $1
+   AND user_id = $2`,
+				siteID,
+				userID,
+			).Scan(
+				&profileID,
+			)
+			if err != nil && err != sql.ErrNoRows {
+				return 0, 0, err
+			}
+			if profileID > 0 {
+				// We already have a user and profile, return those
+				return userID, profileID, nil
+			}
+		}
+
+		// We have a user for another site, but no profiles on this one
+		return userID, 0, nil
 	}
 
+	// We do not have a user or profile, create the user
 	err = tx.QueryRow(`
 INSERT INTO users (
     email, language, created, is_banned, password,
@@ -181,7 +213,7 @@ INSERT INTO users (
 		&userID,
 	)
 
-	return userID, err
+	return userID, 0, err
 }
 
 // createProfile puts a profile into the database

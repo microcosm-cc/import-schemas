@@ -45,7 +45,7 @@ func createSiteAndAdminUser(
 		}
 		defer tx.Rollback()
 
-		userID, err := createUser(tx, owner)
+		userID, _, err := createUser(tx, 0, owner)
 		if err != nil {
 			log.Fatal(err)
 		}

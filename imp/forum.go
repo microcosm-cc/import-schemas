@@ -2,10 +2,9 @@ package imp
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"time"
-
-	"github.com/cheggaaa/pb"
 
 	src "github.com/microcosm-cc/export-schemas/go/forum"
 	h "github.com/microcosm-cc/microcosm/helpers"
@@ -32,7 +31,7 @@ type Microcosm struct {
 
 // importForums iterates a the export directory, storing each forums
 // individually
-func importForums(args conc.Args) (errors []error) {
+func importForums(args conc.Args, gophers int) (errors []error) {
 
 	// Forums
 	args.ItemTypeID = h.ItemTypes[h.ItemTypeMicrocosm]
@@ -45,21 +44,12 @@ func importForums(args conc.Args) (errors []error) {
 		return
 	}
 
-	ids := files.GetIDs(args.ItemTypeID)
-
-	bar := pb.StartNew(len(ids))
-
-	for _, id := range ids {
-		err := importForum(args, id)
-		if err != nil {
-			errors = append(errors, err)
-		}
-		bar.Increment()
-	}
-
-	bar.Finish()
-
-	return errors
+	return conc.RunTasks(
+		files.GetIDs(args.ItemTypeID),
+		args,
+		importForum,
+		gophers,
+	)
 }
 
 func importForum(args conc.Args, itemID int64) error {
@@ -72,10 +62,38 @@ func importForum(args conc.Args, itemID int64) error {
 	srcForum := src.Forum{}
 	err := files.JSONFileToInterface(
 		files.GetPath(args.ItemTypeID, itemID),
-		srcForum,
+		&srcForum,
 	)
 	if err != nil {
 		return err
+	}
+
+	createdById := accounting.GetNewID(
+		args.OriginID,
+		h.ItemTypes[h.ItemTypeProfile],
+		srcForum.Author,
+	)
+	if createdById == 0 {
+		return fmt.Errorf(
+			`Cannot find existing user for src author %d for src forum %d`,
+			srcForum.Author,
+			srcForum.ID,
+		)
+	}
+
+	// CreatedBy and OwnedBy are assumed to be the site owner.
+	m := Microcosm{
+		SiteID:      args.SiteID,
+		Title:       srcForum.Name,
+		Description: srcForum.Text,
+		Created:     time.Now(),
+		CreatedBy:   createdById,
+		OwnedBy:     createdById,
+		IsOpen:      srcForum.Open,
+		IsSticky:    srcForum.Sticky,
+		IsModerated: srcForum.Moderated,
+		IsDeleted:   srcForum.Deleted,
+		IsVisible:   true,
 	}
 
 	tx, err := h.GetTransaction()
@@ -84,20 +102,6 @@ func importForum(args conc.Args, itemID int64) error {
 	}
 	defer tx.Rollback()
 
-	// CreatedBy and OwnedBy are assumed to be the site owner.
-	m := Microcosm{
-		SiteID:      args.SiteID,
-		Title:       srcForum.Name,
-		Description: srcForum.Text,
-		Created:     time.Now(),
-		CreatedBy:   srcForum.Author,
-		OwnedBy:     srcForum.Author,
-		IsOpen:      srcForum.Open,
-		IsSticky:    srcForum.Sticky,
-		IsModerated: srcForum.Moderated,
-		IsDeleted:   srcForum.Deleted,
-		IsVisible:   true,
-	}
 	MID, err := createMicrocosm(tx, m)
 	if err != nil {
 		return err

@@ -6,8 +6,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/cheggaaa/pb"
-
 	src "github.com/microcosm-cc/export-schemas/go/forum"
 	h "github.com/microcosm-cc/microcosm/helpers"
 
@@ -36,7 +34,7 @@ type Conversation struct {
 }
 
 // importConversations walks the tree importing each conversation
-func importConversations(args conc.Args) (errors []error) {
+func importConversations(args conc.Args, gophers int) (errors []error) {
 
 	args.ItemTypeID = h.ItemTypes[h.ItemTypeConversation]
 
@@ -48,20 +46,12 @@ func importConversations(args conc.Args) (errors []error) {
 		return
 	}
 
-	ids := files.GetIDs(args.ItemTypeID)
-
-	bar := pb.StartNew(len(ids))
-
-	// Iterate conversations in order.
-	for _, id := range ids {
-		err := importConversation(args, id)
-		if err != nil {
-			errors = append(errors, err)
-		}
-		bar.Increment()
-	}
-	bar.Finish()
-	return
+	return conc.RunTasks(
+		files.GetIDs(args.ItemTypeID),
+		args,
+		importConversation,
+		gophers,
+	)
 }
 
 // importConversation imports a single conversation or skips it if it has been
@@ -70,7 +60,7 @@ func importConversation(args conc.Args, itemID int64) error {
 	srcConversation := src.Conversation{}
 	err := files.JSONFileToInterface(
 		files.GetPath(args.ItemTypeID, itemID),
-		srcConversation,
+		&srcConversation,
 	)
 	if err != nil {
 		return err
