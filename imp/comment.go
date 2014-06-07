@@ -1,4 +1,4 @@
-package main
+package imp
 
 import (
 	"database/sql"

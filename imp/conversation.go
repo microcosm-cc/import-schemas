@@ -1,12 +1,9 @@
-package main
+package imp
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"sort"
 	"time"
 
 	"github.com/cheggaaa/pb"
@@ -15,7 +12,7 @@ import (
 	h "github.com/microcosm-cc/microcosm/helpers"
 
 	"github.com/microcosm-cc/import-schemas/accounting"
-	"github.com/microcosm-cc/import-schemas/walk"
+	"github.com/microcosm-cc/import-schemas/files"
 )
 
 // Conversation struct
@@ -46,32 +43,27 @@ func ImportConversations(
 	errors []error,
 ) {
 
-	eConvMap, err := walk.WalkExports(rootpath, "conversations")
+	var itemTypeID = h.ItemTypes[h.ItemTypeConversation]
+
+	log.Print("Importing conversations...")
+
+	err := files.WalkExportTree(rootpath, itemTypeID)
 	if err != nil {
-		errors = append(errors, err)
+		exitWithError(err, errors)
 		return
 	}
 
-	var cKeys []int
-	for key := range eConvMap {
-		cKeys = append(cKeys, key)
-	}
-	sort.Ints(cKeys)
+	ids := files.GetIDs(itemTypeID)
 
-	bar := pb.StartNew(len(cKeys))
+	bar := pb.StartNew(len(ids))
 
 	// Iterate conversations in order.
-	for _, CID := range cKeys {
+	for _, CID := range ids {
 
 		bar.Increment()
 
-		bytes, err := ioutil.ReadFile(eConvMap[CID])
-		if err != nil {
-			errors = append(errors, err)
-			continue
-		}
 		eConv := exports.Conversation{}
-		err = json.Unmarshal(bytes, &eConv)
+		err = files.JSONFileToInterface(files.GetPath(itemTypeID, CID), eConv)
 		if err != nil {
 			errors = append(errors, err)
 			continue

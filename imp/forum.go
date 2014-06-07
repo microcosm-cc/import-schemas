@@ -1,11 +1,8 @@
-package main
+package imp
 
 import (
 	"database/sql"
-	"encoding/json"
-	"io/ioutil"
 	"log"
-	"sort"
 	"time"
 
 	"github.com/cheggaaa/pb"
@@ -14,7 +11,7 @@ import (
 	h "github.com/microcosm-cc/microcosm/helpers"
 
 	"github.com/microcosm-cc/import-schemas/accounting"
-	"github.com/microcosm-cc/import-schemas/walk"
+	"github.com/microcosm-cc/import-schemas/files"
 )
 
 // Microcosm struct
@@ -75,32 +72,26 @@ func ImportForums(
 ) {
 
 	// Forums
+	var itemTypeID = h.ItemTypes[h.ItemTypeMicrocosm]
+
 	log.Print("Importing forums...")
 
-	eForumMap, err := walk.WalkExports(rootpath, "forums")
+	err := files.WalkExportTree(rootpath, itemTypeID)
 	if err != nil {
 		exitWithError(err, errors)
+		return
 	}
-	var fKeys []int
-	for key := range eForumMap {
-		fKeys = append(fKeys, key)
-	}
-	sort.Ints(fKeys)
 
-	bar := pb.StartNew(len(fKeys))
+	ids := files.GetIDs(itemTypeID)
 
-	for _, FID := range fKeys {
+	bar := pb.StartNew(len(ids))
+
+	for _, FID := range ids {
 
 		bar.Increment()
 
-		bytes, err := ioutil.ReadFile(eForumMap[FID])
-		if err != nil {
-			errors = append(errors, err)
-			continue
-		}
-
 		eForum := exports.Forum{}
-		err = json.Unmarshal(bytes, &eForum)
+		err = files.JSONFileToInterface(files.GetPath(itemTypeID, FID), eForum)
 		if err != nil {
 			errors = append(errors, err)
 			continue

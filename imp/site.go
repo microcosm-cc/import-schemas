@@ -1,4 +1,4 @@
-package main
+package imp
 
 import (
 	"database/sql"
@@ -44,7 +44,7 @@ func CreateSiteAndAdminUser(
 		}
 		defer tx.Rollback()
 
-		userID, err := StoreUser(tx, owner)
+		userID, err := createUser(tx, owner)
 		if err != nil {
 			log.Fatal(err)
 		}
