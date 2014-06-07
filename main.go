@@ -1,8 +1,9 @@
 package main
 
 import (
-	"log"
+	"flag"
 
+	_ "github.com/golang/glog"
 	_ "github.com/lib/pq"
 
 	h "github.com/microcosm-cc/microcosm/helpers"
@@ -12,7 +13,7 @@ import (
 )
 
 func main() {
-	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
+	flag.Parse()
 
 	h.InitDBConnection(h.DBConfig{
 		Host:     config.DbHost,

@@ -1,7 +1,9 @@
 package imp
 
 import (
-	"log"
+	"fmt"
+
+	"github.com/golang/glog"
 
 	"github.com/microcosm-cc/import-schemas/conc"
 	"github.com/microcosm-cc/import-schemas/config"
@@ -17,7 +19,7 @@ func Import() {
 	// owner.
 	eOwner, err := loadUsers(config.Rootpath, config.SiteOwnerID)
 	if err != nil {
-		log.Fatal(err)
+		glog.Fatal(err)
 	}
 
 	// Create the site and the admin user to initialise the import
@@ -33,8 +35,9 @@ func Import() {
 	errs := importProfiles(args, gophers)
 	if len(errs) > 0 {
 		for _, err := range errs {
-			log.Println(err)
+			glog.Error(err)
 		}
+		glog.Flush()
 		return
 	}
 
@@ -42,8 +45,9 @@ func Import() {
 	errs = importForums(args, gophers)
 	if len(errs) > 0 {
 		for _, err := range errs {
-			log.Println(err)
+			glog.Error(err)
 		}
+		glog.Flush()
 		return
 	}
 
@@ -51,8 +55,9 @@ func Import() {
 	errs = importConversations(args, gophers)
 	if len(errs) > 0 {
 		for _, err := range errs {
-			log.Println(err)
+			glog.Error(err)
 		}
+		glog.Flush()
 		return
 	}
 
@@ -60,11 +65,12 @@ func Import() {
 
 func exitWithError(fatal error, errors []error) {
 	if len(errors) > 0 {
-		log.Print("Encountered errors while importing:")
+		fmt.Println("Encountered errors while importing. Please check logs")
+
 		for _, err := range errors {
-			log.Print(err)
+			glog.Error(err)
 		}
 	}
-	log.Print("Fatal error:")
-	log.Fatal(fatal)
+
+	glog.Fatal(fatal)
 }

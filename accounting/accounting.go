@@ -3,10 +3,10 @@ package accounting
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"sync"
 
 	"github.com/cheggaaa/pb"
+	"github.com/golang/glog"
 
 	h "github.com/microcosm-cc/microcosm/helpers"
 )
@@ -120,7 +120,7 @@ func updateStateMap(
 		commentsLock.Unlock()
 
 	default:
-		log.Fatal(fmt.Errorf("Not yet implemented for %d", itemTypeID))
+		glog.Fatal(fmt.Errorf("Not yet implemented for %d", itemTypeID))
 	}
 }
 
@@ -164,7 +164,7 @@ func GetNewID(
 		commentsLock.Unlock()
 
 	default:
-		log.Fatal(fmt.Errorf("Not yet implemented for %d", itemTypeID))
+		glog.Fatal(fmt.Errorf("Not yet implemented for %d", itemTypeID))
 	}
 
 	return itemID
@@ -175,10 +175,12 @@ func GetNewID(
 // Potentially very expensive, use with care.
 func LoadPriorImports(originID int64) {
 
-	log.Print("Mapping existing records...")
+	fmt.Println("Mapping existing records...")
+	glog.Info("Mapping existing records...")
 
 	db, err := h.GetConnection()
 	if err != nil {
+		glog.Errorf("Failed to get a DB connection: %+v", err)
 		return
 	}
 
@@ -192,8 +194,7 @@ WHERE origin_id = $1`,
 		&records,
 	)
 	if err != nil {
-		log.Fatal(err)
-		return
+		glog.Fatal(err)
 	}
 
 	bar := pb.StartNew(records)
@@ -207,8 +208,7 @@ WHERE origin_id = $1`,
 		originID,
 	)
 	if err != nil {
-		log.Fatal(err)
-		return
+		glog.Fatal(err)
 	}
 	defer rows.Close()
 
@@ -226,14 +226,14 @@ WHERE origin_id = $1`,
 			&newID,
 		)
 		if err != nil {
-			log.Fatal(err)
+			glog.Fatal(err)
 		}
 
 		updateStateMap(itemTypeID, oldID, newID)
 	}
 	err = rows.Err()
 	if err != nil {
-		log.Fatal(err)
+		glog.Fatal(err)
 	}
 	rows.Close()
 

@@ -3,9 +3,8 @@ package imp
 import (
 	"database/sql"
 	"fmt"
-	"log"
 
-	//"github.com/cheggaaa/pb"
+	"github.com/golang/glog"
 
 	src "github.com/microcosm-cc/export-schemas/go/forum"
 	h "github.com/microcosm-cc/microcosm/helpers"
@@ -33,6 +32,7 @@ func loadUsers(rootPath string, ownerID int64) (src.Profile, error) {
 
 	err := files.WalkExportTree(rootPath, itemTypeID)
 	if err != nil {
+		glog.Errorf("Failed to walk tree: %+v", err)
 		return src.Profile{}, err
 	}
 
@@ -47,9 +47,13 @@ func loadUsers(rootPath string, ownerID int64) (src.Profile, error) {
 	owner := src.Profile{}
 	err = files.JSONFileToInterface(ownerPath, &owner)
 	if err != nil {
+		glog.Errorf("Failed to load profile from JSON: %+v", err)
 		return src.Profile{}, err
 	}
 
+	if glog.V(2) {
+		glog.Infof("Found owner profile %d", owner.ID)
+	}
 	return owner, nil
 }
 
@@ -57,7 +61,8 @@ func loadUsers(rootPath string, ownerID int64) (src.Profile, error) {
 // individually
 func importProfiles(args conc.Args, gophers int) (errors []error) {
 
-	log.Print("Importing profiles...")
+	fmt.Println("Importing profiles...")
+	glog.Info("Importing profiles...")
 
 	args.ItemTypeID = h.ItemTypes[h.ItemTypeProfile]
 
@@ -73,6 +78,9 @@ func importProfiles(args conc.Args, gophers int) (errors []error) {
 func importProfile(args conc.Args, itemID int64) error {
 	// Skip when it already exists
 	if accounting.GetNewID(args.OriginID, args.ItemTypeID, itemID) > 0 {
+		if glog.V(2) {
+			glog.Infof("Skipping profile %d", itemID)
+		}
 		return nil
 	}
 
@@ -86,17 +94,20 @@ func importProfile(args conc.Args, itemID int64) error {
 		&srcProfile,
 	)
 	if err != nil {
+		glog.Errorf("Failed to load profile from JSON: %+v", err)
 		return err
 	}
 
 	tx, err := h.GetTransaction()
 	if err != nil {
+		glog.Errorf("Failed to get transaction: %+v", err)
 		return err
 	}
 	defer tx.Rollback()
 
 	userID, profileID, err := createUser(tx, args.SiteID, srcProfile)
 	if err != nil {
+		glog.Errorf("Failed to createUser for profile %d: %+v", itemID, err)
 		return err
 	}
 
@@ -110,9 +121,13 @@ func importProfile(args conc.Args, itemID int64) error {
 			profileID,
 		)
 		if err != nil {
+			glog.Errorf("Failed to recordImport: %+v", err)
 			return err
 		}
 
+		if glog.V(2) {
+			glog.Infof("Found profile %d for src profile %d", profileID, itemID)
+		}
 		return nil
 	}
 
@@ -129,6 +144,7 @@ func importProfile(args conc.Args, itemID int64) error {
 	}
 	profileID, err = createProfile(tx, profile)
 	if err != nil {
+		glog.Errorf("Failed to createProfile for profile %d: %+v", itemID, err)
 		return err
 	}
 
@@ -140,14 +156,19 @@ func importProfile(args conc.Args, itemID int64) error {
 		profileID,
 	)
 	if err != nil {
+		glog.Errorf("Failed to recordImport: %+v", err)
 		return err
 	}
 
 	err = tx.Commit()
 	if err != nil {
+		glog.Errorf("Failed to commit transaction: %+v", err)
 		return err
 	}
 
+	if glog.V(2) {
+		glog.Infof("Successfully imported profile %d", itemID)
+	}
 	return nil
 }
 

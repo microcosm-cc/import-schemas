@@ -2,7 +2,9 @@ package imp
 
 import (
 	"database/sql"
-	"log"
+	"fmt"
+
+	"github.com/golang/glog"
 
 	src "github.com/microcosm-cc/export-schemas/go/forum"
 	h "github.com/microcosm-cc/microcosm/helpers"
@@ -41,18 +43,18 @@ func createSiteAndAdminUser(
 		// Doesn't exist, so create the admin user
 		tx, err := h.GetTransaction()
 		if err != nil {
-			log.Fatal(err)
+			glog.Fatal(err)
 		}
 		defer tx.Rollback()
 
 		userID, _, err := createUser(tx, 0, owner)
 		if err != nil {
-			log.Fatal(err)
+			glog.Fatal(err)
 		}
 
 		err = tx.Commit()
 		if err != nil {
-			log.Fatal(err)
+			glog.Fatal(err)
 		}
 
 		// Use create_owned_site which will create the site and owner's profile.
@@ -63,14 +65,14 @@ func createSiteAndAdminUser(
 			ThemeID:      1,
 		})
 		if err != nil {
-			log.Fatal(err)
+			glog.Fatal(err)
 		}
 
-		log.Printf(
+		fmt.Printf(
 			"Importing into NEW site\n"+
 				"Title: %s\n"+
 				"ID: %d\n"+
-				"OwnedBy: %d",
+				"OwnedBy: %d\n",
 			config.SiteName,
 			siteID,
 			adminID,
@@ -78,11 +80,11 @@ func createSiteAndAdminUser(
 
 		siteCreatedByUs = true
 	} else {
-		log.Printf(
+		fmt.Printf(
 			"Importing into EXISTING site\n"+
 				"Title: %s\n"+
 				"ID: %d\n"+
-				"OwnedBy: %d",
+				"OwnedBy: %d\n",
 			config.SiteName,
 			siteID,
 			adminID,
@@ -91,13 +93,13 @@ func createSiteAndAdminUser(
 
 	tx2, err := h.GetTransaction()
 	if err != nil {
-		log.Fatal(err)
+		glog.Fatal(err)
 	}
 	defer tx2.Rollback()
 
 	originID = GetImportInProgress(siteID, config.SiteName)
 	if originID == 0 {
-		log.Println("Commencing import")
+		fmt.Println("Commencing import")
 		// Create an import origin.
 		originID, err = accounting.CreateImportOrigin(
 			tx2,
@@ -105,11 +107,11 @@ func createSiteAndAdminUser(
 			siteID,
 		)
 		if err != nil {
-			log.Fatal(err)
+			glog.Fatal(err)
 		}
 
 	} else {
-		log.Println("Resuming import")
+		fmt.Println("Resuming import")
 		accounting.LoadPriorImports(originID)
 	}
 
@@ -123,13 +125,13 @@ func createSiteAndAdminUser(
 			adminID,
 		)
 		if err != nil {
-			log.Fatal(err)
+			glog.Fatal(err)
 		}
 	}
 
 	err = tx2.Commit()
 	if err != nil {
-		log.Fatal(err)
+		glog.Fatal(err)
 	}
 
 	// Finalise the site creation and import initialisation
@@ -146,7 +148,7 @@ func GetExistingSiteAndAdmin(
 ) {
 	db, err := h.GetConnection()
 	if err != nil {
-		log.Fatal(err)
+		glog.Fatal(err)
 	}
 
 	err = db.QueryRow(`
@@ -165,7 +167,7 @@ SELECT site_id
 	case err == sql.ErrNoRows:
 		return
 	case err != nil:
-		log.Fatal(err)
+		glog.Fatal(err)
 	}
 
 	return
@@ -180,7 +182,7 @@ func GetImportInProgress(
 ) {
 	db, err := h.GetConnection()
 	if err != nil {
-		log.Fatal(err)
+		glog.Fatal(err)
 	}
 
 	err = db.QueryRow(`
@@ -196,7 +198,7 @@ SELECT origin_id
 	case err == sql.ErrNoRows:
 		return
 	case err != nil:
-		log.Fatal(err)
+		glog.Fatal(err)
 	}
 
 	return
@@ -214,7 +216,7 @@ func CreateOwnedSite(
 ) {
 	db, err := h.GetConnection()
 	if err != nil {
-		log.Fatal(err)
+		glog.Fatal(err)
 	}
 
 	// Create simple profile for site owner.
@@ -252,7 +254,7 @@ SELECT new_ids.new_site_id
 		&profileID,
 	)
 	if err != nil {
-		log.Fatal(err)
+		glog.Fatal(err)
 	}
 
 	return

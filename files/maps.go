@@ -1,11 +1,12 @@
 package files
 
 import (
-	"log"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/golang/glog"
 
 	h "github.com/microcosm-cc/microcosm/helpers"
 )
@@ -111,7 +112,7 @@ func GetIDs(itemTypeID int64) []int64 {
 		watcherIDsToPathsLock.Unlock()
 
 	default:
-		log.Fatal("Not yet implemented")
+		glog.Fatal("Not yet implemented")
 	}
 
 	sort.Sort(Int64Slice(keys))
@@ -137,7 +138,8 @@ func addPath(itemTypeID int64, path string) {
 	// And converting it to an int64
 	id, err := strconv.ParseInt(filePath, 10, 64)
 	if err != nil {
-		log.Print(err)
+		glog.Error("Failed to parseInt %s %+v", filePath, err)
+		return
 	}
 
 	// Finally we add the path to the approprate map
@@ -184,7 +186,7 @@ func addPath(itemTypeID int64, path string) {
 		watcherIDsToPathsLock.Unlock()
 
 	default:
-		log.Fatal("Not yet implemented")
+		glog.Fatal("Not yet implemented")
 	}
 }
 
@@ -238,10 +240,15 @@ func GetPath(itemTypeID int64, itemID int64) string {
 		watcherIDsToPathsLock.Unlock()
 
 	default:
-		log.Fatal("Not yet implemented")
+		glog.Fatal("Not yet implemented")
 	}
 
 	if !ok {
+		glog.Errorf(
+			"File did not exist for itemTypeID %d and itemID %d",
+			itemTypeID,
+			itemID,
+		)
 		return ""
 	}
 

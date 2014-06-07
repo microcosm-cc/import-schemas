@@ -1,7 +1,7 @@
 package files
 
 import (
-	"log"
+	"github.com/golang/glog"
 
 	src "github.com/microcosm-cc/export-schemas/go/forum"
 	h "github.com/microcosm-cc/microcosm/helpers"
@@ -37,7 +37,7 @@ func getPathForItemType(itemTypeID int64) string {
 		path = src.RolesPath
 
 	default:
-		log.Fatal("Not yet implemented")
+		glog.Fatal("Not yet implemented")
 	}
 
 	return path

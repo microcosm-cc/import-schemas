@@ -1,10 +1,11 @@
 package files
 
 import (
-	"log"
 	"os"
 	"path"
 	"path/filepath"
+
+	"github.com/golang/glog"
 )
 
 // WalkExportTree walks an export subdirectory and adding valid paths to the map
@@ -18,13 +19,15 @@ func WalkExportTree(rootPath string, itemTypeID int64) error {
 	// Define what should be done in the subsequent directory walk.
 	walk := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			log.Print(err)
+			glog.Errorf("Walk error %+v", err)
 			return err
 		}
+
 		if filepath.Ext(path) == ".json" {
 			addPath(itemTypeID, path)
 		}
-		return err
+
+		return nil
 	}
 
 	// Walk each path in the directory.

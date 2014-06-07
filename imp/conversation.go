@@ -3,8 +3,9 @@ package imp
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"time"
+
+	"github.com/golang/glog"
 
 	src "github.com/microcosm-cc/export-schemas/go/forum"
 	h "github.com/microcosm-cc/microcosm/helpers"
@@ -38,7 +39,8 @@ func importConversations(args conc.Args, gophers int) (errors []error) {
 
 	args.ItemTypeID = h.ItemTypes[h.ItemTypeConversation]
 
-	log.Print("Importing conversations...")
+	fmt.Println("Importing conversations...")
+	glog.Info("Importing conversations...")
 
 	err := files.WalkExportTree(args.RootPath, args.ItemTypeID)
 	if err != nil {
@@ -57,22 +59,32 @@ func importConversations(args conc.Args, gophers int) (errors []error) {
 // importConversation imports a single conversation or skips it if it has been
 // done aleady
 func importConversation(args conc.Args, itemID int64) error {
+
+	// Skip when it already exists
+	if accounting.GetNewID(args.OriginID, args.ItemTypeID, itemID) > 0 {
+		if glog.V(2) {
+			glog.Infof("Skipping conversation %d", itemID)
+		}
+		return nil
+	}
+
 	srcConversation := src.Conversation{}
 	err := files.JSONFileToInterface(
 		files.GetPath(args.ItemTypeID, itemID),
 		&srcConversation,
 	)
 	if err != nil {
+		glog.Errorf("Failed to load conversation from JSON: %+v", err)
 		return err
 	}
 
 	// Look up the author profile based on the old user ID.
-	authorI := accounting.GetNewID(
+	createdByID := accounting.GetNewID(
 		args.OriginID,
 		h.ItemTypes[h.ItemTypeProfile],
 		srcConversation.Author,
 	)
-	if authorI == 0 {
+	if createdByID == 0 {
 		return fmt.Errorf(
 			"Exported user ID %d does not have an imported profile, "+
 				"skipped conversation %d\n",
@@ -81,12 +93,12 @@ func importConversation(args conc.Args, itemID int64) error {
 		)
 	}
 
-	MID := accounting.GetNewID(
+	microcosmID := accounting.GetNewID(
 		args.OriginID,
 		h.ItemTypes[h.ItemTypeMicrocosm],
 		srcConversation.ForumID,
 	)
-	if MID == 0 {
+	if microcosmID == 0 {
 		return fmt.Errorf(
 			"Exported forum ID %d does not have an imported microcosm, "+
 				"skipped conversation %d\n",
@@ -96,10 +108,10 @@ func importConversation(args conc.Args, itemID int64) error {
 	}
 
 	c := Conversation{
-		MicrocosmID: MID,
+		MicrocosmID: microcosmID,
 		Title:       srcConversation.Name,
 		Created:     srcConversation.DateCreated,
-		CreatedBy:   authorI,
+		CreatedBy:   createdByID,
 		ViewCount:   srcConversation.ViewCount,
 		IsSticky:    false,
 		IsOpen:      true,
@@ -110,12 +122,18 @@ func importConversation(args conc.Args, itemID int64) error {
 
 	tx, err := h.GetTransaction()
 	if err != nil {
-		log.Fatal(err)
+		glog.Errorf("Failed to createMicrocosm for forum %d: %+v", itemID, err)
+		return err
 	}
 	defer tx.Rollback()
 
 	iCID, err := createConversation(tx, c)
 	if err != nil {
+		glog.Errorf(
+			"Failed to createConversation for conversation %d: %+v",
+			itemID,
+			err,
+		)
 		return err
 	}
 
@@ -127,14 +145,19 @@ func importConversation(args conc.Args, itemID int64) error {
 		iCID,
 	)
 	if err != nil {
+		glog.Errorf("Failed to recordImport: %+v", err)
 		return err
 	}
 
 	err = tx.Commit()
 	if err != nil {
+		glog.Errorf("Failed to commit transaction: %+v", err)
 		return err
 	}
 
+	if glog.V(2) {
+		glog.Infof("Successfully imported conversation %d", itemID)
+	}
 	return nil
 }
 

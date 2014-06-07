@@ -3,8 +3,9 @@ package imp
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"time"
+
+	"github.com/golang/glog"
 
 	src "github.com/microcosm-cc/export-schemas/go/forum"
 	h "github.com/microcosm-cc/microcosm/helpers"
@@ -36,7 +37,8 @@ func importForums(args conc.Args, gophers int) (errors []error) {
 	// Forums
 	args.ItemTypeID = h.ItemTypes[h.ItemTypeMicrocosm]
 
-	log.Print("Importing forums...")
+	fmt.Println("Importing forums...")
+	glog.Info("Importing forums...")
 
 	err := files.WalkExportTree(args.RootPath, args.ItemTypeID)
 	if err != nil {
@@ -56,6 +58,9 @@ func importForum(args conc.Args, itemID int64) error {
 
 	// Skip when it already exists
 	if accounting.GetNewID(args.OriginID, args.ItemTypeID, itemID) > 0 {
+		if glog.V(2) {
+			glog.Infof("Skipping forum %d", itemID)
+		}
 		return nil
 	}
 
@@ -65,15 +70,16 @@ func importForum(args conc.Args, itemID int64) error {
 		&srcForum,
 	)
 	if err != nil {
+		glog.Errorf("Failed to load forum from JSON: %+v", err)
 		return err
 	}
 
-	createdById := accounting.GetNewID(
+	createdByID := accounting.GetNewID(
 		args.OriginID,
 		h.ItemTypes[h.ItemTypeProfile],
 		srcForum.Author,
 	)
-	if createdById == 0 {
+	if createdByID == 0 {
 		return fmt.Errorf(
 			`Cannot find existing user for src author %d for src forum %d`,
 			srcForum.Author,
@@ -87,8 +93,8 @@ func importForum(args conc.Args, itemID int64) error {
 		Title:       srcForum.Name,
 		Description: srcForum.Text,
 		Created:     time.Now(),
-		CreatedBy:   createdById,
-		OwnedBy:     createdById,
+		CreatedBy:   createdByID,
+		OwnedBy:     createdByID,
 		IsOpen:      srcForum.Open,
 		IsSticky:    srcForum.Sticky,
 		IsModerated: srcForum.Moderated,
@@ -98,12 +104,14 @@ func importForum(args conc.Args, itemID int64) error {
 
 	tx, err := h.GetTransaction()
 	if err != nil {
+		glog.Errorf("Failed to get transaction: %+v", err)
 		return err
 	}
 	defer tx.Rollback()
 
 	MID, err := createMicrocosm(tx, m)
 	if err != nil {
+		glog.Errorf("Failed to createMicrocosm for forum %d: %+v", itemID, err)
 		return err
 	}
 	err = accounting.RecordImport(
@@ -114,14 +122,19 @@ func importForum(args conc.Args, itemID int64) error {
 		MID,
 	)
 	if err != nil {
+		glog.Errorf("Failed to recordImport: %+v", err)
 		return err
 	}
 
 	err = tx.Commit()
 	if err != nil {
+		glog.Errorf("Failed to commit transaction: %+v", err)
 		return err
 	}
 
+	if glog.V(2) {
+		glog.Infof("Successfully imported forum %d", itemID)
+	}
 	return nil
 }
 

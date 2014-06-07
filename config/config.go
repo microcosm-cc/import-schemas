@@ -1,7 +1,7 @@
 package config
 
 import (
-	"log"
+	"github.com/golang/glog"
 
 	"github.com/microcosm-cc/goconfig"
 )
@@ -57,59 +57,59 @@ var (
 func init() {
 	conf, err := goconfig.ReadConfigFile(configFile)
 	if err != nil {
-		log.Fatal(err)
+		glog.Fatal(err)
 	}
 
 	// Database config.
 	DbHost, err = conf.GetString(configDatabaseSection, "host")
 	if err != nil {
-		log.Fatal(err)
+		glog.Fatal(err)
 	}
 
 	DbPort, err = conf.GetInt64(configDatabaseSection, "port")
 	if err != nil {
-		log.Fatal(err)
+		glog.Fatal(err)
 	}
 
 	DbName, err = conf.GetString(configDatabaseSection, "database")
 	if err != nil {
-		log.Fatal(err)
+		glog.Fatal(err)
 	}
 
 	DbUser, err = conf.GetString(configDatabaseSection, "username")
 	if err != nil {
-		log.Fatal(err)
+		glog.Fatal(err)
 	}
 
 	DbPass, err = conf.GetString(configDatabaseSection, "password")
 	if err != nil {
-		log.Fatal(err)
+		glog.Fatal(err)
 	}
 
 	// Site config.
 	SiteName, err = conf.GetString(configSiteSection, "name")
 	if err != nil {
-		log.Fatal(err)
+		glog.Fatal(err)
 	}
 
 	SiteDesc, err = conf.GetString(configSiteSection, "description")
 	if err != nil {
-		log.Fatal(err)
+		glog.Fatal(err)
 	}
 
 	SiteSubdomainKey, err = conf.GetString(configSiteSection, "subdomain_key")
 	if err != nil {
-		log.Fatal(err)
+		glog.Fatal(err)
 	}
 
 	SiteOwnerID, err = conf.GetInt64(configSiteSection, "owner_id")
 	if err != nil {
-		log.Fatal(err)
+		glog.Fatal(err)
 	}
 
 	// Export config.
 	Rootpath, err = conf.GetString(configExportSection, "rootpath")
 	if err != nil {
-		log.Fatal(err)
+		glog.Fatal(err)
 	}
 }
