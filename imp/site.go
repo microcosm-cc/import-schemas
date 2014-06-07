@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"log"
 
-	exports "github.com/microcosm-cc/export-schemas/go/forum"
+	src "github.com/microcosm-cc/export-schemas/go/forum"
 	h "github.com/microcosm-cc/microcosm/helpers"
 
 	"github.com/microcosm-cc/import-schemas/accounting"
@@ -27,7 +27,7 @@ type Site struct {
 
 // CreateSiteAndAdminUser will either create or fetch the admin user and site
 func CreateSiteAndAdminUser(
-	owner exports.User,
+	owner src.Profile,
 ) (
 	originID int64,
 	siteID int64,

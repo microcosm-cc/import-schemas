@@ -7,7 +7,7 @@ import (
 
 	"github.com/cheggaaa/pb"
 
-	exports "github.com/microcosm-cc/export-schemas/go/forum"
+	src "github.com/microcosm-cc/export-schemas/go/forum"
 	h "github.com/microcosm-cc/microcosm/helpers"
 
 	"github.com/microcosm-cc/import-schemas/accounting"
@@ -24,29 +24,29 @@ type Profile struct {
 	AvatarURLNullable sql.NullString
 }
 
-// LoadUsers from JSON files into exports.User structs and returns the owner
+// LoadUsers from JSON files into src.Profile structs and returns the owner
 // (as specified in the config file) separately.
-func LoadUsers(rootPath string, ownerID int64) (exports.User, error) {
+func LoadUsers(rootPath string, ownerID int64) (src.Profile, error) {
 
 	itemTypeID := h.ItemTypes[h.ItemTypeProfile]
 
 	err := files.WalkExportTree(rootPath, itemTypeID)
 	if err != nil {
-		return exports.User{}, err
+		return src.Profile{}, err
 	}
 
 	// Does the owner, as specified in the config file, actually exist in the
 	// files that we've discovered? If no, throw an error, and if yes return it.
 	ownerPath := files.GetPath(itemTypeID, ownerID)
 	if ownerPath == "" {
-		return exports.User{},
+		return src.Profile{},
 			fmt.Errorf("Owner (from config) not found (within exported users)")
 	}
 
-	owner := exports.User{}
+	owner := src.Profile{}
 	err = files.JSONFileToInterface(ownerPath, &owner)
 	if err != nil {
-		return exports.User{}, err
+		return src.Profile{}, err
 	}
 
 	return owner, nil
@@ -55,7 +55,7 @@ func LoadUsers(rootPath string, ownerID int64) (exports.User, error) {
 // createUser stores a single user, but does not create an associated profile.
 // If an existing user is found in Microcosm with the same email address, we
 // return that
-func createUser(tx *sql.Tx, user exports.User) (int64, error) {
+func createUser(tx *sql.Tx, user src.Profile) (int64, error) {
 
 	var userID int64
 
@@ -115,7 +115,7 @@ INSERT INTO profiles (
 	return
 }
 
-// ImportProfiles iterates a range of exports.Users and imports each
+// ImportProfiles iterates a range of src.Users and imports each
 // individually
 func ImportProfiles(
 	siteID int64,
@@ -151,12 +151,12 @@ func importProfile(siteID int64, originID int64, itemID int64) error {
 		return nil
 	}
 
-	// Read user from disk
+	// Read profile from disk
 	//
 	// Done here so that if we are resuming and only a few failed we only end up
 	// reading a few things from disk rather than everything.
-	user := exports.User{}
-	err := files.JSONFileToInterface(files.GetPath(itemTypeID, itemID), &user)
+	srcProfile := src.Profile{}
+	err := files.JSONFileToInterface(files.GetPath(itemTypeID, itemID), &srcProfile)
 	if err != nil {
 		return err
 	}
@@ -167,12 +167,12 @@ func importProfile(siteID int64, originID int64, itemID int64) error {
 	}
 	defer tx.Rollback()
 
-	userID, err := createUser(tx, user)
+	userID, err := createUser(tx, srcProfile)
 	if err != nil {
 		return err
 	}
 
-	// Create a corresponding profile for the user.
+	// Create a corresponding profile for the srcProfile.
 	avatarURL := sql.NullString{
 		String: "/api/v1/files/66cca61feb8001cb71a9fb7062ff94c9d2543340",
 		Valid:  true,
@@ -180,10 +180,10 @@ func importProfile(siteID int64, originID int64, itemID int64) error {
 	profile := Profile{
 		SiteID:            siteID,
 		UserID:            userID,
-		ProfileName:       user.Name,
+		ProfileName:       srcProfile.Name,
 		AvatarURLNullable: avatarURL,
 	}
-	iProfileID, err := createProfile(tx, profile)
+	profileID, err := createProfile(tx, profile)
 	if err != nil {
 		return err
 	}
@@ -192,8 +192,8 @@ func importProfile(siteID int64, originID int64, itemID int64) error {
 		tx,
 		originID,
 		h.ItemTypes[h.ItemTypeProfile],
-		user.ID,
-		iProfileID,
+		srcProfile.ID,
+		profileID,
 	)
 	if err != nil {
 		return err

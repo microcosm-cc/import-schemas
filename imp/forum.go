@@ -7,7 +7,7 @@ import (
 
 	"github.com/cheggaaa/pb"
 
-	exports "github.com/microcosm-cc/export-schemas/go/forum"
+	src "github.com/microcosm-cc/export-schemas/go/forum"
 	h "github.com/microcosm-cc/microcosm/helpers"
 
 	"github.com/microcosm-cc/import-schemas/accounting"
@@ -90,7 +90,7 @@ func ImportForums(
 
 		bar.Increment()
 
-		eForum := exports.Forum{}
+		eForum := src.Forum{}
 		err = files.JSONFileToInterface(files.GetPath(itemTypeID, FID), eForum)
 		if err != nil {
 			errors = append(errors, err)
