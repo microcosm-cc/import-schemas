@@ -38,6 +38,9 @@ func Import() {
 			glog.Error(err)
 		}
 		glog.Flush()
+
+		// If we have errors we do not continue. Errors importing profiles
+		// cascade significantly as everything is associated to a profile.
 		return
 	}
 
@@ -48,6 +51,9 @@ func Import() {
 			glog.Error(err)
 		}
 		glog.Flush()
+
+		// If we have errors we do not continue. Errors importing forums
+		// cascade significantly as conversations are associated to the forums.
 		return
 	}
 
@@ -58,6 +64,9 @@ func Import() {
 			glog.Error(err)
 		}
 		glog.Flush()
+
+		// If we have errors we do not continue. Errors importing conversations
+		// cascade significantly as comments are associated to the conversations.
 		return
 	}
 
