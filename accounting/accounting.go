@@ -92,6 +92,10 @@ INSERT into imported_items (
 	return nil
 }
 
+func AddDeletedProfileID(profileID int64) {
+	updateStateMap(h.ItemTypes[h.ItemTypeProfile], 0, profileID)
+}
+
 func updateStateMap(
 	itemTypeID int64,
 	oldID int64,

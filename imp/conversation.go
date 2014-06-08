@@ -85,12 +85,13 @@ func importConversation(args conc.Args, itemID int64) error {
 		srcConversation.Author,
 	)
 	if createdByID == 0 {
-		return fmt.Errorf(
-			"Exported user ID %d does not have an imported profile, "+
-				"skipped conversation %d\n",
-			srcConversation.Author,
-			itemID,
-		)
+		createdByID = args.DeletedProfileID
+		if glog.V(2) {
+			glog.Infof(
+				"Using deleted profile for profile ID %d",
+				srcConversation.Author,
+			)
+		}
 	}
 
 	microcosmID := accounting.GetNewID(

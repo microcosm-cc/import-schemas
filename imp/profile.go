@@ -57,6 +57,70 @@ func loadProfiles(rootPath string, ownerID int64) (src.Profile, error) {
 	return owner, nil
 }
 
+// createDeletedProfile to own all of the orphaned content we find
+func createDeletedProfile(args conc.Args) (int64, error) {
+	// Create the stub
+	tx, err := h.GetTransaction()
+	if err != nil {
+		glog.Errorf("Failed to get transaction: %+v", err)
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	userID, profileID, err := createUser(
+		tx,
+		args.SiteID,
+		src.Profile{
+			// Orphaned data is likely to have the ID of zero
+			ID:        0,
+			IPAddress: "127.0.0.1",
+			Name:      "deleted",
+			ReceiveEmailFromAdmins:    false,
+			ReceiveEmailNotifications: false,
+		},
+	)
+	if err != nil {
+		glog.Errorf("Failed to create user for deleted profile: %+v", err)
+		return 0, err
+	}
+
+	if profileID > 0 {
+		return profileID, nil
+	}
+
+	profileID, err = createProfile(
+		tx,
+		Profile{
+			ProfileName: "deleted",
+			SiteID:      args.SiteID,
+			UserID:      userID,
+			AvatarURLNullable: sql.NullString{
+				String: "/api/v1/files/66cca61feb8001cb71a9fb7062ff94c9d2543340",
+				Valid:  true,
+			},
+		},
+	)
+	if err != nil {
+		glog.Errorf("Failed to create profile for deleted profile: %+v", err)
+		return 0, err
+	}
+
+	// We can't use RecordImport for this as the 0 for the oldID will fail the
+	// foreign key value
+	accounting.AddDeletedProfileID(profileID)
+
+	err = tx.Commit()
+	if err != nil {
+		glog.Errorf("Failed to commit transaction: %+v", err)
+		return 0, err
+	}
+
+	if glog.V(2) {
+		glog.Infof("Successfully create deleted profile %d", profileID)
+	}
+	return profileID, nil
+}
+
 // importProfiles iterates the profiles and imports each individually
 func importProfiles(args conc.Args, gophers int) (errors []error) {
 

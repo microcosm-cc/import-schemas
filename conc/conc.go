@@ -12,10 +12,12 @@ import (
 // immutable for the duration of time that it takes to process all tasks of a
 // like kind.
 type Args struct {
-	RootPath   string
-	SiteID     int64
-	OriginID   int64
-	ItemTypeID int64
+	RootPath           string
+	SiteID             int64
+	OriginID           int64
+	ItemTypeID         int64
+	SiteOwnerProfileID int64
+	DeletedProfileID   int64
 }
 
 // RunTasks will take a range of []int64, some function args, a function and

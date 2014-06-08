@@ -23,13 +23,24 @@ func Import() {
 	}
 
 	// Create the site and the admin user to initialise the import
-	originID, siteID := createSiteAndAdminUser(srcAdminProfile)
+	originID, siteID, adminProfileID := createSiteAndAdminUser(srcAdminProfile)
 
+	// Create args for all concurrent jobs, these are basically shared values
+	// to help normalise the signature of tasks so that we can run lots of
+	// different tasks as if the functions had the same signature.
 	args := conc.Args{
-		RootPath: config.Rootpath,
-		OriginID: originID,
-		SiteID:   siteID,
+		RootPath:           config.Rootpath,
+		OriginID:           originID,
+		SiteID:             siteID,
+		SiteOwnerProfileID: adminProfileID,
 	}
+
+	// Create a user for orphaned content
+	deletedProfileID, err := createDeletedProfile(args)
+	if err != nil {
+		glog.Fatal(err)
+	}
+	args.DeletedProfileID = deletedProfileID
 
 	// Import all other users.
 	errs := importProfiles(args, gophers)
