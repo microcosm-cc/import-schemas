@@ -24,8 +24,8 @@ type Profile struct {
 	AvatarURLNullable sql.NullString
 }
 
-// loadProfiles from JSON files into src.Profile structs and returns the owner
-// (as specified in the config file) separately.
+// loadProfiles from JSON files into the files/maps.go knowledge of what exists
+// and returns the owner (as specified in the config file) as a src.Profile{}.
 func loadProfiles(rootPath string, ownerID int64) (src.Profile, error) {
 
 	itemTypeID := h.ItemTypes[h.ItemTypeProfile]
@@ -57,8 +57,7 @@ func loadProfiles(rootPath string, ownerID int64) (src.Profile, error) {
 	return owner, nil
 }
 
-// importProfiles iterates a range of src.Users and imports each
-// individually
+// importProfiles iterates the profiles and imports each individually
 func importProfiles(args conc.Args, gophers int) (errors []error) {
 
 	fmt.Println("Importing profiles...")
