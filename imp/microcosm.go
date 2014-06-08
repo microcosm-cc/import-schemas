@@ -30,9 +30,9 @@ type Microcosm struct {
 	IsVisible   bool
 }
 
-// importForums iterates a the export directory, storing each forums
+// importMicrocosms iterates a the export directory, storing each forums
 // individually
-func importForums(args conc.Args, gophers int) (errors []error) {
+func importMicrocosms(args conc.Args, gophers int) (errors []error) {
 
 	// Forums
 	args.ItemTypeID = h.ItemTypes[h.ItemTypeMicrocosm]
@@ -49,12 +49,12 @@ func importForums(args conc.Args, gophers int) (errors []error) {
 	return conc.RunTasks(
 		files.GetIDs(args.ItemTypeID),
 		args,
-		importForum,
+		importMicrocosm,
 		gophers,
 	)
 }
 
-func importForum(args conc.Args, itemID int64) error {
+func importMicrocosm(args conc.Args, itemID int64) error {
 
 	// Skip when it already exists
 	if accounting.GetNewID(args.OriginID, args.ItemTypeID, itemID) > 0 {

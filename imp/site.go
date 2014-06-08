@@ -28,12 +28,7 @@ type Site struct {
 }
 
 // createSiteAndAdminUser will either create or fetch the admin user and site
-func createSiteAndAdminUser(
-	owner src.Profile,
-) (
-	originID int64,
-	siteID int64,
-) {
+func createSiteAndAdminUser(owner src.Profile) (originID int64, siteID int64) {
 	var adminID int64
 
 	// Get the site if it exists

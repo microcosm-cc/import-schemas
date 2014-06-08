@@ -13,17 +13,17 @@ const gophers int = 100
 
 // Import orchestrates and runs the import job, ensuring that any dependencies
 // are imported before they are needed. This is mostly a top level ordering of
-// things: users before the comments they made, etc.
+// things: profiles before the comments they made, etc.
 func Import() {
-	// Load all users and create a single user entry corresponding to the site
-	// owner.
-	eOwner, err := loadUsers(config.Rootpath, config.SiteOwnerID)
+	// Load all profiles and create a single user entry corresponding to the site
+	// admin.
+	srcAdminProfile, err := loadProfiles(config.Rootpath, config.SiteOwnerID)
 	if err != nil {
 		glog.Fatal(err)
 	}
 
 	// Create the site and the admin user to initialise the import
-	originID, siteID := createSiteAndAdminUser(eOwner)
+	originID, siteID := createSiteAndAdminUser(srcAdminProfile)
 
 	args := conc.Args{
 		RootPath: config.Rootpath,
@@ -44,8 +44,8 @@ func Import() {
 		return
 	}
 
-	// Import forums.
-	errs = importForums(args, gophers)
+	// Import microcosms.
+	errs = importMicrocosms(args, gophers)
 	if len(errs) > 0 {
 		for _, err := range errs {
 			glog.Error(err)

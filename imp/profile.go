@@ -24,9 +24,9 @@ type Profile struct {
 	AvatarURLNullable sql.NullString
 }
 
-// loadUsers from JSON files into src.Profile structs and returns the owner
+// loadProfiles from JSON files into src.Profile structs and returns the owner
 // (as specified in the config file) separately.
-func loadUsers(rootPath string, ownerID int64) (src.Profile, error) {
+func loadProfiles(rootPath string, ownerID int64) (src.Profile, error) {
 
 	itemTypeID := h.ItemTypes[h.ItemTypeProfile]
 
