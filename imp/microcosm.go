@@ -37,8 +37,8 @@ func importMicrocosms(args conc.Args, gophers int) (errors []error) {
 	// Forums
 	args.ItemTypeID = h.ItemTypes[h.ItemTypeMicrocosm]
 
-	fmt.Println("Importing forums...")
-	glog.Info("Importing forums...")
+	fmt.Println("Importing forums as microcosms...")
+	glog.Info("Importing forums as microcosms...")
 
 	err := files.WalkExportTree(args.RootPath, args.ItemTypeID)
 	if err != nil {
