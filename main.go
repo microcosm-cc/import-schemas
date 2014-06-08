@@ -3,8 +3,8 @@ package main
 import (
 	"flag"
 
+	// Included for the side effect of configuring the logger via flag.Parse()
 	_ "github.com/golang/glog"
-	_ "github.com/lib/pq"
 
 	h "github.com/microcosm-cc/microcosm/helpers"
 

@@ -138,7 +138,7 @@ func addPath(itemTypeID int64, path string) {
 	// And converting it to an int64
 	id, err := strconv.ParseInt(filePath, 10, 64)
 	if err != nil {
-		glog.Error("Failed to parseInt %s %+v", filePath, err)
+		glog.Errorf("Failed to parseInt %s %+v", filePath, err)
 		return
 	}
 

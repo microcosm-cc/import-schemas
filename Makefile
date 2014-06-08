@@ -12,7 +12,7 @@
 #   install:      Builds, tests and installs the code locally
 
 # Sub-directories containing code to be vetted or linted
-CODE = accounting config files imp
+CODE = accounting conc config files imp
 
 # The first target is always the default action if `make` is called without args
 # We clean, build and install into $GOPATH so that it can just be run
@@ -26,10 +26,11 @@ build: clean
 
 vet:
 	go tool vet $(CODE)
-	go tool vet *.go
+	go tool vet main.go
 
 lint:
-	golint $(CODE) *.go
+	golint $(CODE)
+	golint main.go
 
 test:
 	go test -v -cover ./...
