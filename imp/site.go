@@ -46,7 +46,7 @@ func createSiteAndAdminUser(
 		}
 		defer tx.Rollback()
 
-		userID, _, err := createUser(tx, 0, owner)
+		userID, _, err := createSiteUser(tx, 0, owner)
 		if err != nil {
 			glog.Fatal(err)
 		}
@@ -218,12 +218,7 @@ func CreateOwnedSite(
 		glog.Fatal(err)
 	}
 
-	// Create simple profile for site owner.
-	profile := Profile{
-		ProfileName: ownerName,
-		UserID:      userID,
-	}
-
+	// Create site and simple profile for site owner.
 	err = db.QueryRow(`
 SELECT new_ids.new_site_id
       ,new_ids.new_profile_id
@@ -236,10 +231,10 @@ SELECT new_ids.new_site_id
 		site.SubdomainKey,
 		site.ThemeID,
 		userID,
-		profile.ProfileName,
+		ownerName,
 
-		profile.AvatarIDNullable,
-		profile.AvatarURLNullable,
+		sql.NullInt64{},
+		sql.NullString{},
 		site.DomainNullable,
 		site.Description,
 		site.LogoURL,
@@ -257,4 +252,77 @@ SELECT new_ids.new_site_id
 	}
 
 	return
+}
+
+// createSiteUser stores a single user, but does not create an associated
+// profile. If an existing user is found in Microcosm with the same email
+// address, we return that
+func createSiteUser(
+	tx *sql.Tx,
+	siteID int64,
+	user src.Profile,
+) (
+	int64,
+	int64,
+	error,
+) {
+	// We may already have a user record based on this email
+	var userID int64
+	err := tx.QueryRow(`
+SELECT user_id
+  FROM users
+ WHERE LOWER(email) = LOWER($1)`,
+		user.Email,
+	).Scan(
+		&userID,
+	)
+	if err != nil && err != sql.ErrNoRows {
+		return 0, 0, err
+	}
+	if userID > 0 {
+		// We have a user record already, but we might also have a profile on
+		// this site for this user
+		if siteID > 0 {
+			var profileID int64
+			err := tx.QueryRow(`
+SELECT profile_id
+  FROM profiles
+ WHERE site_id = $1
+   AND user_id = $2`,
+				siteID,
+				userID,
+			).Scan(
+				&profileID,
+			)
+			if err != nil && err != sql.ErrNoRows {
+				return 0, 0, err
+			}
+			if profileID > 0 {
+				// We already have a user and profile, return those
+				return userID, profileID, nil
+			}
+		}
+
+		// We have a user for another site, but no profiles on this one
+		return userID, 0, nil
+	}
+
+	// We do not have a user or profile, create the user
+	err = tx.QueryRow(`
+INSERT INTO users (
+    email, language, created, is_banned, password,
+    password_date
+) VALUES (
+	$1, $2, $3, $4, '',
+	NOW()
+) RETURNING user_id;`,
+		user.Email,
+		"en-gb",
+		user.DateCreated,
+		user.Banned,
+	).Scan(
+		&userID,
+	)
+
+	return userID, 0, err
 }
