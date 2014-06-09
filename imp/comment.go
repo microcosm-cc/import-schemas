@@ -87,29 +87,117 @@ func importComment(args conc.Args, itemID int64) error {
 		srcComment.Author,
 	)
 	if createdByID == 0 {
-		// Owner of this comment may have been deleted. How can we tell?
+		createdByID = args.DeletedProfileID
+		if glog.V(2) {
+			glog.Infof(
+				"Using deleted profile for profile ID %d",
+				srcComment.Author,
+			)
+		}
+	}
+
+	// Determine which new conversation ID this comment belongs to.
+	conversationID := accounting.GetNewID(
+		args.OriginID,
+		h.ItemTypes[h.ItemTypeConversation],
+		srcComment.Association.OnID,
+	)
+	if conversationID == 0 {
 		return fmt.Errorf(
-			`Cannot find existing user for src author %d for src comment %d`,
-			srcComment.Author,
+			"Exported conversation ID %d does not have an imported ID, "+
+				"skipped comment %d\n",
 			srcComment.ID,
+			itemID,
 		)
+	}
+
+	// The comment this comment replies to must have been imported previously.
+	replyToID := accounting.GetNewID(
+		args.OriginID,
+		h.ItemTypes[h.ItemTypeComment],
+		srcComment.InReplyTo,
+	)
+	if replyToID == 0 {
+		return fmt.Errorf(
+			"Exported comment ID %d does not have an imported ID, "+
+				"skipped comment %d\n",
+			srcComment.InReplyTo,
+			itemID,
+		)
+	}
+
+	visible := !srcComment.Deleted && !srcComment.Moderated
+	comment := Comment{
+		ItemTypeID:      h.ItemTypes[h.ItemTypeConversation],
+		ItemID:          conversationID,
+		ProfileID:       createdByID,
+		Created:         srcComment.DateCreated,
+		InReplyTo:       replyToID,
+		IsVisible:       visible,
+		IsModerated:     srcComment.Moderated,
+		IsDeleted:       srcComment.Deleted,
+		AttachmentCount: 0,
+	}
+
+	tx, err := h.GetTransaction()
+	if err != nil {
+		glog.Errorf("Failed to createComment for CommentID %d: %+v", itemID, err)
+		return err
+	}
+	defer tx.Rollback()
+
+	iCID, err := createComment(tx, comment)
+	if err != nil {
+		glog.Errorf("Failed to createComment for conversation %d: %+v", itemID, err)
+		return err
+	}
+
+	err = accounting.RecordImport(
+		tx,
+		args.OriginID,
+		args.ItemTypeID,
+		srcComment.ID,
+		iCID,
+	)
+	if err != nil {
+		glog.Errorf("Failed to recordImport: %+v", err)
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		glog.Errorf("Failed to commit transaction: %+v", err)
+		return err
+	}
+
+	if glog.V(2) {
+		glog.Infof("Successfully imported conversation %d", itemID)
 	}
 	return nil
 }
 
 // createComment puts a single comment into the database.
-// TODO: comment revision
-func StoreComment(tx *sql.Tx, c Comment) (int64, error) {
+func createComment(tx *sql.Tx, c Comment) (cID int64, err error) {
 
-	var cID int64
-	err := tx.QueryRow(
-		`INSERT INTO comments () VALUES () RETURNING conversation_id;`,
+	err = tx.QueryRow(
+		`INSERT INTO comments (
+            item_type_id, item_id, profile_id, created, is_visible,
+            is_moderated, is_deleted, in_reply_to, attachment_count, yay_count,
+            meh_count, grr_count
+        ) VALUES (
+            $1, $2, $3, $4, $5,
+            $6, $7, $8, 0, 0,
+            0, 0
+        ) RETURNING comment_id;`,
+		c.ItemTypeID,
+		c.ItemID,
+		c.ProfileID,
+		c.Created,
+		c.IsVisible,
+		c.IsModerated,
+		c.IsDeleted,
+		c.InReplyTo,
 	).Scan(&cID)
 
-	if err != nil {
-		return cID, err
-	}
-	err = tx.Commit()
-	return cID, err
-
+	return
 }
