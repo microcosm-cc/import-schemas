@@ -107,6 +107,10 @@ func importConversation(args conc.Args, itemID int64) error {
 		)
 	}
 
+	if len(srcConversation.Name) > 150 {
+		srcConversation.Name = srcConversation.Name[:150]
+	}
+
 	c := Conversation{
 		MicrocosmID: microcosmID,
 		Title:       srcConversation.Name,

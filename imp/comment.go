@@ -22,7 +22,7 @@ type Comment struct {
 	ItemID          int64
 	ProfileID       int64
 	Created         time.Time
-	InReplyTo       int64
+	InReplyTo       sql.NullInt64
 	IsVisible       bool
 	IsModerated     bool
 	IsDeleted       bool
@@ -111,28 +111,41 @@ func importComment(args conc.Args, itemID int64) error {
 		)
 	}
 
-	// The comment this comment replies to must have been imported previously.
-	replyToID := accounting.GetNewID(
-		args.OriginID,
-		h.ItemTypes[h.ItemTypeComment],
-		srcComment.InReplyTo,
-	)
-	if replyToID == 0 {
-		return fmt.Errorf(
-			"Exported comment ID %d does not have an imported ID, "+
-				"skipped comment %d\n",
+	// The comment this comment replies to may have been imported previously.
+	if srcComment.InReplyTo > 0 {
+		replyToID := accounting.GetNewID(
+			args.OriginID,
+			h.ItemTypes[h.ItemTypeComment],
 			srcComment.InReplyTo,
-			itemID,
 		)
+		if replyToID > 0 {
+			srcComment.InReplyTo = replyToID
+		} else {
+			// Log that InReplyTo wasn't found.
+			if glog.V(2) {
+				glog.Infof(
+					"InReplyTo for comment ID %d does not have an imported ID",
+					itemID,
+				)
+			}
+		}
 	}
 
 	visible := !srcComment.Deleted && !srcComment.Moderated
+
+	// InReplyTo is NULL if 0 or higher than the current comment's ID (indicating
+	// a merge or some other modification to the original thread).
+	var inReplyTo sql.NullInt64
+	if srcComment.InReplyTo > 0 && srcComment.InReplyTo < srcComment.ID {
+		inReplyTo = sql.NullInt64{Valid: true, Int64: srcComment.InReplyTo}
+	}
+
 	comment := Comment{
 		ItemTypeID:      h.ItemTypes[h.ItemTypeConversation],
 		ItemID:          conversationID,
 		ProfileID:       createdByID,
 		Created:         srcComment.DateCreated,
-		InReplyTo:       replyToID,
+		InReplyTo:       inReplyTo,
 		IsVisible:       visible,
 		IsModerated:     srcComment.Moderated,
 		IsDeleted:       srcComment.Deleted,

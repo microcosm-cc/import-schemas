@@ -81,6 +81,7 @@ func Import() {
 		return
 	}
 
+	// Import comments.
 	errs = importComments(args)
 	if len(errs) > 0 {
 		for _, err := range errs {
