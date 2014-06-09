@@ -24,7 +24,9 @@ func main() {
 		Password: config.DbPass,
 	})
 
-	cache.InitCache("localhost", 11211)
+	// // If you want to use memcache to help speed things up... the cache misses
+	// // may not make this as fast as you hope though
+	// cache.InitCache("localhost", 11211)
 
 	imp.Import()
 }
