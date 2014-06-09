@@ -6,7 +6,7 @@ import (
 	// Included for the side effect of configuring the logger via flag.Parse()
 	_ "github.com/golang/glog"
 
-	"github.com/microcosm-cc/microcosm/cache"
+	// "github.com/microcosm-cc/microcosm/cache"
 	h "github.com/microcosm-cc/microcosm/helpers"
 
 	"github.com/microcosm-cc/import-schemas/config"
