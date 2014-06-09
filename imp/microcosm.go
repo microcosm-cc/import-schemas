@@ -43,7 +43,6 @@ func importMicrocosms(args conc.Args, gophers int) (errors []error) {
 	err := files.WalkExportTree(args.RootPath, args.ItemTypeID)
 	if err != nil {
 		exitWithError(err, errors)
-		return
 	}
 
 	return conc.RunTasks(
