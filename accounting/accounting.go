@@ -28,13 +28,6 @@ var (
 	profilesLock sync.Mutex
 )
 
-func init() {
-	microcosms = map[int64]int64{}
-	conversations = map[int64]int64{}
-	comments = map[int64]int64{}
-	profiles = map[int64]int64{}
-}
-
 // CreateImportOrigin records in Postgres that we are about to start an import
 // and the summary info of which site was the source of this
 func CreateImportOrigin(tx *sql.Tx, title string, siteID int64) (int64, error) {
@@ -92,6 +85,10 @@ INSERT into imported_items (
 	return nil
 }
 
+// AddDeletedProfileID adds the deleted profile id to the map of imported
+// profiles, helping to ensure that when 0 is looked up it will return the new
+// ID. We cannot do thise via RecordImport as PostgreSQL views the zero value as
+// breaking the integrity of the database.
 func AddDeletedProfileID(profileID int64) {
 	updateStateMap(h.ItemTypes[h.ItemTypeProfile], 0, profileID)
 }
