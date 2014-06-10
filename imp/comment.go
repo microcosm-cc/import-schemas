@@ -17,7 +17,6 @@ import (
 
 // Comment struct
 type Comment struct {
-	CommentID       int64
 	ItemTypeID      int64
 	ItemID          int64
 	ProfileID       int64
@@ -31,13 +30,20 @@ type Comment struct {
 
 // CommentRevision struct
 type CommentRevision struct {
-	RevisionID int64
-	CommentID  int64
-	ProfileID  int64
-	Raw        string
-	HTML       string
-	Created    time.Time
-	IsCurrent  bool
+	CommentID int64
+	ProfileID int64
+	Raw       string
+	Created   time.Time
+}
+
+// Walk directory and load all comments into a map ID -> Filepath
+// Iterate the map, loading the files into src.Comments
+//
+
+type Node struct {
+	Comment  *src.Comment
+	Replies  []*Node
+	ReplyIds []int64
 }
 
 func importComments(args conc.Args) (errors []error) {
@@ -53,15 +59,76 @@ func importComments(args conc.Args) (errors []error) {
 		exitWithError(err, errors)
 	}
 
-	return conc.RunTasks(
-		files.GetIDs(args.ItemTypeID),
-		args,
-		importComment,
-		1,
-	)
+	loadedCommentMap := make(map[int64]Node)
+	roots := []int64{}
+	replies := []int64{}
+
+	commentIDs := files.GetIDs(args.ItemTypeID)
+
+	for _, ID := range commentIDs {
+		srcComment := src.Comment{}
+		// errcheck
+		files.JSONFileToInterface(
+			files.GetPath(args.ItemTypeID, ID),
+			&srcComment,
+		)
+		loadedCommentMap[ID] = Node{
+			Comment: &srcComment,
+		}
+		if srcComment.InReplyTo > 0 {
+			replies = append(replies, srcComment.ID)
+		} else {
+			roots = append(roots, srcComment.ID)
+		}
+	}
+	fmt.Printf("Roots: %d, Replies: %d\n", roots, replies)
+
+	// For each reply, find the parent node and append self to the replies slice.
+	for _, ID := range replies {
+		inReplyTo := loadedCommentMap[ID].Comment.InReplyTo
+		// Append this ID to the list of replies of the "parent"
+		// Only if it's not a merged thread.
+		if ID > inReplyTo {
+			// Can we use a pointer to the map value instead of putting again?
+			parent := loadedCommentMap[inReplyTo]
+			parent.ReplyIDs = append(parent.Replies, ID)
+            parent.Replies = append(...)
+			loadedCommentMap[inReplyTo] = parent
+		} else {
+			fmt.Printf("Broke a cycle, comment: %d, parent: %d\n", ID, inReplyTo)
+		}
+	}
+
+	// Adapted from conc/conc.go
+	bar := pb.StartNew(len(commentIDs))
+	done := make(chan struct{})
+	quit := false
+	tasks := make(chan in64, len(roots))
+
+	// Now, import all roots, then traverse the roots BFS.
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+		}()
+	}
+
 }
 
-func importComment(args conc.Args, itemID int64) error {
+// Return a list of comments to import.
+// There are no cycles, so we don't need to check if the current
+// node has already been visited.
+func bfs(node Node) []int64 {
+	visited = []int64{}
+	queue := []Node{node}
+
+	for n := range queue {
+		visited = append(visited, node.Replies...)
+		queue = append(queue, node.Replies...)
+	}
+	return visited
+}
+
+func importComment(args conc.Args, itemID int64, srcComment src.Comment) error {
 
 	// Skip when it already exists
 	if accounting.GetNewID(args.OriginID, args.ItemTypeID, itemID) > 0 {
@@ -71,14 +138,16 @@ func importComment(args conc.Args, itemID int64) error {
 		return nil
 	}
 
-	srcComment := src.Comment{}
-	err := files.JSONFileToInterface(
-		files.GetPath(args.ItemTypeID, itemID),
-		&srcComment,
-	)
-	if err != nil {
-		glog.Errorf("Failed to load comment from JSON: %+v", err)
-		return err
+	if srcComment == nil {
+		srcComment = src.Comment{}
+		err := files.JSONFileToInterface(
+			files.GetPath(args.ItemTypeID, itemID),
+			&srcComment,
+		)
+		if err != nil {
+			glog.Errorf("Failed to load comment from JSON: %+v", err)
+			return err
+		}
 	}
 
 	createdByID := accounting.GetNewID(
@@ -165,6 +234,30 @@ func importComment(args conc.Args, itemID int64) error {
 		return err
 	}
 
+	// Fetch new ID of revision creator.
+	revisionAuthorID := accounting.GetNewID(
+		args.OriginID,
+		h.ItemTypes[h.ItemTypeProfile],
+		srcComment.Versions[0].Editor,
+	)
+	// Fall back to original comment author.
+	if revisionAuthorID == 0 {
+		revisionAuthorID = createdByID
+	}
+
+	revision := CommentRevision{
+		CommentID: iCID,
+		ProfileID: revisionAuthorID,
+		Raw:       srcComment.Versions[0].Text,
+		Created:   srcComment.Versions[0].DateModified,
+	}
+
+	_, err = createRevision(tx, revision)
+	if err != nil {
+		glog.Errorf("Failed to createRevision for CommentID: %d", srcComment.ID)
+		return err
+	}
+
 	err = accounting.RecordImport(
 		tx,
 		args.OriginID,
@@ -191,7 +284,6 @@ func importComment(args conc.Args, itemID int64) error {
 
 // createComment puts a single comment into the database.
 func createComment(tx *sql.Tx, c Comment) (cID int64, err error) {
-
 	err = tx.QueryRow(
 		`INSERT INTO comments (
             item_type_id, item_id, profile_id, created, is_visible,
@@ -211,6 +303,29 @@ func createComment(tx *sql.Tx, c Comment) (cID int64, err error) {
 		c.IsDeleted,
 		c.InReplyTo,
 	).Scan(&cID)
+	return
+}
 
+// createRevision puts a single comment into the database.
+func createRevision(tx *sql.Tx, r CommentRevision) (rID int64, err error) {
+	err = tx.QueryRow(
+		`INSERT INTO revisions (
+            comment_id,
+            profile_id,
+            "raw",
+            created,
+            is_current
+        ) VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+            true
+        ) RETURNING revision_id`,
+		r.CommentID,
+		r.ProfileID,
+		r.Raw,
+		r.Created,
+	).Scan(&rID)
 	return
 }
