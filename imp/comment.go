@@ -3,8 +3,10 @@ package imp
 import (
 	"database/sql"
 	"fmt"
+	"sync"
 	"time"
 
+	"github.com/cheggaaa/pb"
 	"github.com/golang/glog"
 
 	src "github.com/microcosm-cc/export-schemas/go/forum"
@@ -41,9 +43,8 @@ type CommentRevision struct {
 //
 
 type Node struct {
-	Comment  *src.Comment
-	Replies  []*Node
-	ReplyIds []int64
+	Comment *src.Comment
+	Replies []*Node
 }
 
 func importComments(args conc.Args) (errors []error) {
@@ -51,81 +52,98 @@ func importComments(args conc.Args) (errors []error) {
 	// Comments.
 	args.ItemTypeID = h.ItemTypes[h.ItemTypeComment]
 
-	fmt.Println("Importing comments...")
-	glog.Info("Importing comments...")
+	glog.Info("Loading comments...")
 
 	err := files.WalkExportTree(args.RootPath, args.ItemTypeID)
 	if err != nil {
 		exitWithError(err, errors)
 	}
 
-	loadedCommentMap := make(map[int64]Node)
+	loadedNodeMap := make(map[int64]*Node)
 	roots := []int64{}
-	replies := []int64{}
 
 	commentIDs := files.GetIDs(args.ItemTypeID)
+	bar := pb.StartNew(len(commentIDs))
 
 	for _, ID := range commentIDs {
+		bar.Increment()
+
 		srcComment := src.Comment{}
-		// errcheck
-		files.JSONFileToInterface(
+		err = files.JSONFileToInterface(
 			files.GetPath(args.ItemTypeID, ID),
 			&srcComment,
 		)
-		loadedCommentMap[ID] = Node{
+		if err != nil {
+			glog.Errorf("Failed to unmarshal comment %d: %s", ID, err)
+			continue
+		}
+
+		// Create a Node representing this comment.
+		node := Node{
 			Comment: &srcComment,
 		}
-		if srcComment.InReplyTo > 0 {
-			replies = append(replies, srcComment.ID)
-		} else {
-			roots = append(roots, srcComment.ID)
+		loadedNodeMap[ID] = &node
+
+		// If the comment is a "root", append to the list.
+		if srcComment.InReplyTo == 0 {
+			roots = append(roots, ID)
+		} else if srcComment.InReplyTo > 0 {
+			// Find the parent comment and append this node to the list of replies.
+			parent, ok := loadedNodeMap[srcComment.InReplyTo]
+			if ok {
+				parent.Replies = append(parent.Replies, &node)
+			} else {
+				glog.Errorf("Could not find InReplyTo: %d for comment %d\n", srcComment.InReplyTo, ID)
+			}
 		}
 	}
-	fmt.Printf("Roots: %d, Replies: %d\n", roots, replies)
+	bar.Finish()
 
-	// For each reply, find the parent node and append self to the replies slice.
-	for _, ID := range replies {
-		inReplyTo := loadedCommentMap[ID].Comment.InReplyTo
-		// Append this ID to the list of replies of the "parent"
-		// Only if it's not a merged thread.
-		if ID > inReplyTo {
-			// Can we use a pointer to the map value instead of putting again?
-			parent := loadedCommentMap[inReplyTo]
-			parent.ReplyIDs = append(parent.Replies, ID)
-            parent.Replies = append(...)
-			loadedCommentMap[inReplyTo] = parent
-		} else {
-			fmt.Printf("Broke a cycle, comment: %d, parent: %d\n", ID, inReplyTo)
-		}
-	}
+	fmt.Printf("Found %d roots\n", len(roots))
+	glog.Info("Found %d roots\n", len(roots))
 
-	// Adapted from conc/conc.go
-	bar := pb.StartNew(len(commentIDs))
-	done := make(chan struct{})
-	quit := false
-	tasks := make(chan in64, len(roots))
+	// Iterate the roots, storing each root first, then doing breadth-first traversal and storing all replies.
+	taskBar := pb.StartNew(len(roots))
+	var wg sync.WaitGroup
+	tasks := make(chan int64, len(roots)+1)
 
-	// Now, import all roots, then traverse the roots BFS.
-	for i := 0; i < 8; i++ {
+	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go func() {
+			for ID := range tasks {
+				node, ok := loadedNodeMap[ID]
+				if ok {
+					bfs(args, node)
+				} else {
+					glog.Errorf("Could not retrieve root: %d\n", ID)
+				}
+				taskBar.Increment()
+			}
 		}()
 	}
 
+	// Send all root IDs to the tasks channel.
+	for _, id := range roots {
+		tasks <- id
+	}
+	close(tasks)
+	wg.Wait()
+	taskBar.Finish()
+
+	return errors
 }
 
-// Return a list of comments to import.
-// There are no cycles, so we don't need to check if the current
-// node has already been visited.
-func bfs(node Node) []int64 {
-	visited = []int64{}
-	queue := []Node{node}
-
-	for n := range queue {
-		visited = append(visited, node.Replies...)
-		queue = append(queue, node.Replies...)
+// Traverse replies breadth-first and store them.
+func bfs(args conc.Args, node *Node) {
+	queue := []*Node{node}
+	for _, n := range queue {
+		err := importComment(args, n.Comment.ID, *n.Comment)
+		if err != nil {
+			fmt.Print(err)
+			glog.Error(err)
+		}
+		queue = append(queue, n.Replies...)
 	}
-	return visited
 }
 
 func importComment(args conc.Args, itemID int64, srcComment src.Comment) error {
@@ -138,7 +156,7 @@ func importComment(args conc.Args, itemID int64, srcComment src.Comment) error {
 		return nil
 	}
 
-	if srcComment == nil {
+	if srcComment.ID == 0 {
 		srcComment = src.Comment{}
 		err := files.JSONFileToInterface(
 			files.GetPath(args.ItemTypeID, itemID),
