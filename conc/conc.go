@@ -58,6 +58,8 @@ func RunTasks(
 				if err != nil {
 					// Quit as we encountered an error
 					if !quit {
+						// Closing the done channel will cancel tasks handled by
+						// other gophers
 						close(done)
 						quit = true
 					}
@@ -88,7 +90,15 @@ func RunTasks(
 	return errs
 }
 
-func doTask(args Args, id int64, task func(Args, int64) error, done <-chan struct{}) error {
+// doTask runs a single task and returns the error value (nil or err).
+// If the done channel is closed, then this task is cancelled.
+func doTask(
+	args Args,
+	id int64,
+	task func(Args, int64) error,
+	done <-chan struct{},
+) error {
+
 	select {
 	case <-done:
 		return fmt.Errorf("task cancelled")

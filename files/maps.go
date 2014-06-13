@@ -30,17 +30,6 @@ var (
 	watcherIDsToPathsLock      sync.Mutex
 )
 
-func init() {
-	attachmentIDsToPaths = map[int64]string{}
-	commentIDsToPaths = map[int64]string{}
-	conversationIDsToPaths = map[int64]string{}
-	huddleIDsToPaths = map[int64]string{}
-	microcosmIDsToPaths = map[int64]string{}
-	profileIDsToPaths = map[int64]string{}
-	roleIDsToPaths = map[int64]string{}
-	watcherIDsToPaths = map[int64]string{}
-}
-
 // Int64Slice attaches the methods of Interface to []int64, sorting in
 // increasing order.
 type Int64Slice []int64

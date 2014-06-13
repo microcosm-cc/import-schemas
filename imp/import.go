@@ -43,7 +43,9 @@ func Import() {
 	args.DeletedProfileID = deletedProfileID
 
 	// Import all other users.
-	errs := importProfiles(args, gophers)
+	// NOTE: Can only use 1 gopher as users may have multiple profiles and we
+	// wish to only keep the oldest (lowest numbered) profile.
+	errs := importProfiles(args, 1)
 	if len(errs) > 0 {
 		for _, err := range errs {
 			glog.Error(err)
