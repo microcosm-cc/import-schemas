@@ -30,6 +30,7 @@ func importComments(args conc.Args) (errors []error) {
 
 	// Comments.
 	args.ItemTypeID = h.ItemTypes[h.ItemTypeComment]
+	fmt.Println("Loading comments...")
 	glog.Info("Loading comments...")
 
 	err := files.WalkExportTree(args.RootPath, args.ItemTypeID)
@@ -81,14 +82,15 @@ func importComments(args conc.Args) (errors []error) {
 	}
 	bar.Finish()
 
-	glog.Info("Found %d comments without parents\n", len(roots))
+	glog.Infof("Found %d comments without parents\n", len(roots))
+	fmt.Println("Importing comments...")
 
 	// Iterate the roots, storing each root first, then doing breadth-first traversal and storing all replies.
 	taskBar := pb.StartNew(len(roots))
 	var wg sync.WaitGroup
 	tasks := make(chan int64, len(roots)+1)
 
-	for i := 0; i < 50; i++ {
+	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go func() {
 			for ID := range tasks {
@@ -122,7 +124,6 @@ func bfs(args conc.Args, node *Node) {
 	for _, n := range queue {
 		err := importComment(args, *n.Comment)
 		if err != nil {
-			fmt.Print(err)
 			glog.Errorf("Error importing comment: %s\n", err)
 		}
 		queue = append(queue, n.Replies...)
@@ -140,7 +141,7 @@ func importComment(args conc.Args, srcComment src.Comment) error {
 	// Fetch new profile ID of comment author.
 	createdByID := accounting.GetNewID(
 		args.OriginID,
-		h.ItemTypes[h.ItemTypeComment],
+		h.ItemTypes[h.ItemTypeProfile],
 		srcComment.Author,
 	)
 	if createdByID == 0 {
