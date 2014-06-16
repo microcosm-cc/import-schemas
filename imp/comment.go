@@ -54,7 +54,7 @@ func importComments(args conc.Args) (errors []error) {
 			&srcComment,
 		)
 		if err != nil {
-			glog.Errorf("Failed to unmarshal comment %d: %s", ID, err)
+			glog.Errorf("Failed to unmarshal comment %d: %s\n", ID, err)
 			continue
 		}
 
@@ -73,13 +73,15 @@ func importComments(args conc.Args) (errors []error) {
 			if ok {
 				parent.Replies = append(parent.Replies, &node)
 			} else {
-				glog.Errorf("Could not find InReplyTo: %d for comment %d\n", srcComment.InReplyTo, ID)
+				// Parent not found, so treat this comment as a root.
+				glog.Infof("Could not find InReplyTo: %d for comment %d\n", srcComment.InReplyTo, ID)
+				roots = append(roots, ID)
 			}
 		}
 	}
 	bar.Finish()
 
-	glog.Info("Found %d comment roots\n", len(roots))
+	glog.Info("Found %d comments without parents\n", len(roots))
 
 	// Iterate the roots, storing each root first, then doing breadth-first traversal and storing all replies.
 	taskBar := pb.StartNew(len(roots))
@@ -107,6 +109,7 @@ func importComments(args conc.Args) (errors []error) {
 		tasks <- id
 	}
 	close(tasks)
+	glog.Info("Waiting for comment tasks to finish\n")
 	wg.Wait()
 	taskBar.Finish()
 
@@ -117,37 +120,24 @@ func importComments(args conc.Args) (errors []error) {
 func bfs(args conc.Args, node *Node) {
 	queue := []*Node{node}
 	for _, n := range queue {
-		err := importComment(args, n.Comment.ID, *n.Comment)
+		err := importComment(args, *n.Comment)
 		if err != nil {
 			fmt.Print(err)
-			glog.Error(err)
+			glog.Errorf("Error importing comment: %s\n", err)
 		}
 		queue = append(queue, n.Replies...)
 	}
 }
 
-func importComment(args conc.Args, itemID int64, srcComment src.Comment) error {
+func importComment(args conc.Args, srcComment src.Comment) error {
 
-	// Skip when it already exists
-	if accounting.GetNewID(args.OriginID, args.ItemTypeID, itemID) > 0 {
-		if glog.V(2) {
-			glog.Infof("Skipping comment %d", itemID)
-		}
+	// Skip if comment already imported.
+	if accounting.GetNewID(args.OriginID, args.ItemTypeID, srcComment.ID) > 0 {
+		glog.Infof("Skipping already-imported comment %d\n", srcComment.ID)
 		return nil
 	}
 
-	if srcComment.ID == 0 {
-		srcComment = src.Comment{}
-		err := files.JSONFileToInterface(
-			files.GetPath(args.ItemTypeID, itemID),
-			&srcComment,
-		)
-		if err != nil {
-			glog.Errorf("Failed to load comment from JSON: %+v", err)
-			return err
-		}
-	}
-
+	// Fetch new profile ID of comment author.
 	createdByID := accounting.GetNewID(
 		args.OriginID,
 		h.ItemTypes[h.ItemTypeComment],
@@ -155,12 +145,7 @@ func importComment(args conc.Args, itemID int64, srcComment src.Comment) error {
 	)
 	if createdByID == 0 {
 		createdByID = args.DeletedProfileID
-		if glog.V(2) {
-			glog.Infof(
-				"Using deleted profile for profile ID %d",
-				srcComment.Author,
-			)
-		}
+		glog.Infof("Using deleted profile for profile ID %d\n", srcComment.Author)
 	}
 
 	// Determine which new conversation ID this comment belongs to.
@@ -173,8 +158,8 @@ func importComment(args conc.Args, itemID int64, srcComment src.Comment) error {
 		return fmt.Errorf(
 			"Exported conversation ID %d does not have an imported ID, "+
 				"skipped comment %d\n",
+			srcComment.Association.OnID,
 			srcComment.ID,
-			itemID,
 		)
 	}
 
@@ -188,19 +173,20 @@ func importComment(args conc.Args, itemID int64, srcComment src.Comment) error {
 		if replyToID > 0 {
 			srcComment.InReplyTo = replyToID
 		} else {
-			glog.Errorf(
-				"InReplyTo for comment ID %d does not have an imported ID",
-				itemID,
+			glog.Infof(
+				"InReplyTo comment ID %d (needed by comment %d) does not have an imported ID\n",
+				srcComment.InReplyTo,
+				srcComment.ID,
 			)
 		}
 	}
 
 	visible := !srcComment.Deleted && !srcComment.Moderated
 
-	// InReplyTo is NULL if 0 or higher than the current comment's ID (indicating
+	// InReplyTo is NULL if the ID is greater than the current comment's ID (indicating
 	// a merge or some other modification to the original thread).
 	var inReplyTo sql.NullInt64
-	if srcComment.InReplyTo > 0 && srcComment.InReplyTo < srcComment.ID {
+	if srcComment.InReplyTo > srcComment.ID {
 		inReplyTo = sql.NullInt64{Valid: true, Int64: srcComment.InReplyTo}
 	}
 
@@ -216,6 +202,7 @@ func importComment(args conc.Args, itemID int64, srcComment src.Comment) error {
 	comment.Meta.Flags.Moderated = srcComment.Moderated
 	comment.Meta.Flags.Deleted = srcComment.Deleted
 
+	// Import creates and commits/rollbacks its own transaction.
 	_, err := comment.Import(args.SiteID)
 	if err != nil || comment.Id < 1 {
 		glog.Errorf("Failed to import comment for conversation %d: %s", srcComment.ID, err)
@@ -224,7 +211,6 @@ func importComment(args conc.Args, itemID int64, srcComment src.Comment) error {
 
 	tx, err := h.GetTransaction()
 	if err != nil {
-		glog.Errorf("Failed to createComment for CommentID %d: %+v", itemID, err)
 		return err
 	}
 	defer tx.Rollback()
