@@ -2,6 +2,7 @@ package imp
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/golang/glog"
@@ -71,15 +72,18 @@ func importMicrocosm(args conc.Args, itemID int64) error {
 		)
 	}
 
-	// CreatedBy and OwnedBy are assumed to be the site owner.
 	m := models.MicrocosmType{}
 	m.SiteId = args.SiteID
 	m.Title = srcForum.Name
+	if strings.TrimSpace(srcForum.Text) != "" {
+		m.Description = srcForum.Text
+	} else {
+		m.Description = srcForum.Name
+	}
 	m.OwnedById = createdByID
-	m.Description = srcForum.Text
 
 	m.Meta.Created = time.Now()
-	m.Meta.CreatedBy = createdByID
+	m.Meta.CreatedById = createdByID
 
 	m.Meta.Flags.Open = srcForum.Open
 	m.Meta.Flags.Sticky = srcForum.Sticky

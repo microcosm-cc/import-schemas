@@ -42,6 +42,10 @@ func Import() {
 	}
 	args.DeletedProfileID = deletedProfileID
 
+	if glog.V(2) {
+		glog.Infof("Args for import: %+v", args)
+	}
+
 	// Import all other users.
 	// NOTE: Can only use 1 gopher as users may have multiple profiles and we
 	// wish to only keep the oldest (lowest numbered) profile.
