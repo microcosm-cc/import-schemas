@@ -3,6 +3,7 @@ package imp
 import (
 	"database/sql"
 	"fmt"
+	"net"
 	"net/http"
 	"sync"
 
@@ -209,7 +210,7 @@ func createProfile(args conc.Args, sp src.Profile) (int64, error) {
 		Valid:  true,
 	}
 
-	_, err = p.Import()
+	_, err = p.Import(net.ParseIP(sp.IPAddress))
 	if err != nil {
 		glog.Errorf("Failed to create profile for profile %d: %+v", sp.ID, err)
 		return 0, err
