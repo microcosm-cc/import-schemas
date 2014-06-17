@@ -134,7 +134,6 @@ func createSiteAndAdminUser(
 	}
 
 	// Finalise the site creation and import initialisation
-
 	return originID, siteID, adminID
 }
 

@@ -1,7 +1,6 @@
 package imp
 
 import (
-	"database/sql"
 	"fmt"
 	"time"
 
@@ -9,26 +8,12 @@ import (
 
 	src "github.com/microcosm-cc/export-schemas/go/forum"
 	h "github.com/microcosm-cc/microcosm/helpers"
+	"github.com/microcosm-cc/microcosm/models"
 
 	"github.com/microcosm-cc/import-schemas/accounting"
 	"github.com/microcosm-cc/import-schemas/conc"
 	"github.com/microcosm-cc/import-schemas/files"
 )
-
-// Microcosm struct
-type Microcosm struct {
-	Title       string
-	Description string
-	SiteID      int64
-	Created     time.Time
-	CreatedBy   int64
-	OwnedBy     int64
-	IsSticky    bool
-	IsModerated bool
-	IsOpen      bool
-	IsDeleted   bool
-	IsVisible   bool
-}
 
 // importMicrocosms iterates a the export directory, storing each forums
 // individually
@@ -87,18 +72,29 @@ func importMicrocosm(args conc.Args, itemID int64) error {
 	}
 
 	// CreatedBy and OwnedBy are assumed to be the site owner.
-	m := Microcosm{
-		SiteID:      args.SiteID,
-		Title:       srcForum.Name,
-		Description: srcForum.Text,
-		Created:     time.Now(),
-		CreatedBy:   createdByID,
-		OwnedBy:     createdByID,
-		IsOpen:      srcForum.Open,
-		IsSticky:    srcForum.Sticky,
-		IsModerated: srcForum.Moderated,
-		IsDeleted:   srcForum.Deleted,
-		IsVisible:   true,
+	m := models.MicrocosmType{}
+	m.SiteId = args.SiteID
+	m.Title = srcForum.Name
+	m.OwnedById = createdByID
+	m.Description = srcForum.Text
+
+	m.Meta.Created = time.Now()
+	m.Meta.CreatedBy = createdByID
+
+	m.Meta.Flags.Open = srcForum.Open
+	m.Meta.Flags.Sticky = srcForum.Sticky
+	m.Meta.Flags.Moderated = srcForum.Moderated
+	m.Meta.Flags.Deleted = srcForum.Deleted
+	m.Meta.Flags.Visible = true
+
+	_, err = m.Import()
+	if err != nil {
+		glog.Errorf(
+			"Failed to create microcosm for microcosm %d: %+v",
+			srcForum.ID,
+			err,
+		)
+		return err
 	}
 
 	tx, err := h.GetTransaction()
@@ -108,7 +104,6 @@ func importMicrocosm(args conc.Args, itemID int64) error {
 	}
 	defer tx.Rollback()
 
-	MID, err := createMicrocosm(tx, m)
 	if err != nil {
 		glog.Errorf("Failed to createMicrocosm for forum %d: %+v", itemID, err)
 		return err
@@ -118,7 +113,7 @@ func importMicrocosm(args conc.Args, itemID int64) error {
 		args.OriginID,
 		args.ItemTypeID,
 		srcForum.ID,
-		MID,
+		m.Id,
 	)
 	if err != nil {
 		glog.Errorf("Failed to recordImport: %+v", err)
@@ -135,35 +130,4 @@ func importMicrocosm(args conc.Args, itemID int64) error {
 		glog.Infof("Successfully imported forum %d", itemID)
 	}
 	return nil
-}
-
-// createMicrocosm puts an individual microcosm into the database
-func createMicrocosm(tx *sql.Tx, m Microcosm) (int64, error) {
-
-	var microcosmID int64
-
-	err := tx.QueryRow(`
-INSERT INTO microcosms (
-    title, description, site_id, created, created_by, owned_by,
-    is_sticky, is_moderated, is_open, is_deleted, is_visible
-) VALUES (
-    $1, $2, $3, NOW(), $4, $5,
-    $6, $7, $8, $9, $10
-) RETURNING microcosm_id;`,
-		m.Title,
-		m.Description,
-		m.SiteID,
-		m.CreatedBy,
-		m.OwnedBy,
-
-		m.IsSticky,
-		m.IsModerated,
-		m.IsOpen,
-		m.IsDeleted,
-		m.IsVisible,
-	).Scan(
-		&microcosmID,
-	)
-
-	return microcosmID, err
 }

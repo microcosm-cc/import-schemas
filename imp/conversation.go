@@ -1,38 +1,18 @@
 package imp
 
 import (
-	"database/sql"
 	"fmt"
-	"time"
 
 	"github.com/golang/glog"
 
 	src "github.com/microcosm-cc/export-schemas/go/forum"
 	h "github.com/microcosm-cc/microcosm/helpers"
+	"github.com/microcosm-cc/microcosm/models"
 
 	"github.com/microcosm-cc/import-schemas/accounting"
 	"github.com/microcosm-cc/import-schemas/conc"
 	"github.com/microcosm-cc/import-schemas/files"
 )
-
-// Conversation struct
-type Conversation struct {
-	ConversationID int64
-	MicrocosmID    int64
-	Title          string
-	Created        time.Time
-	CreatedBy      int64
-	Edited         time.Time
-	EditedBy       int64
-	EditReason     string
-	IsSticky       bool
-	IsOpen         bool
-	IsDeleted      bool
-	IsModerated    bool
-	IsVisible      bool
-	CommentCount   int64
-	ViewCount      int64
-}
 
 // importConversations walks the tree importing each conversation
 func importConversations(args conc.Args, gophers int) (errors []error) {
@@ -111,27 +91,18 @@ func importConversation(args conc.Args, itemID int64) error {
 		srcConversation.Name = srcConversation.Name[:150]
 	}
 
-	c := Conversation{
-		MicrocosmID: microcosmID,
-		Title:       srcConversation.Name,
-		Created:     srcConversation.DateCreated,
-		CreatedBy:   createdByID,
-		ViewCount:   srcConversation.ViewCount,
-		IsSticky:    false,
-		IsOpen:      true,
-		IsDeleted:   false,
-		IsModerated: false,
-		IsVisible:   true,
-	}
+	m := models.ConversationType{}
+	m.MicrocosmId = microcosmID
+	m.Title = srcConversation.Name
+	m.ViewCount = srcConversation.ViewCount
+	m.Meta.Created = srcConversation.DateCreated
+	m.Meta.CreatedById = createdByID
+	m.Meta.Flags.Deleted = srcConversation.Deleted
+	m.Meta.Flags.Moderated = srcConversation.Moderated
+	m.Meta.Flags.Open = srcConversation.Open
+	m.Meta.Flags.Sticky = srcConversation.Sticky
 
-	tx, err := h.GetTransaction()
-	if err != nil {
-		glog.Errorf("Failed to createMicrocosm for forum %d: %+v", itemID, err)
-		return err
-	}
-	defer tx.Rollback()
-
-	iCID, err := createConversation(tx, c)
+	_, err = m.Import(args.SiteID, createdByID)
 	if err != nil {
 		glog.Errorf(
 			"Failed to createConversation for conversation %d: %+v",
@@ -141,12 +112,19 @@ func importConversation(args conc.Args, itemID int64) error {
 		return err
 	}
 
+	tx, err := h.GetTransaction()
+	if err != nil {
+		glog.Errorf("Failed to createMicrocosm for forum %d: %+v", itemID, err)
+		return err
+	}
+	defer tx.Rollback()
+
 	err = accounting.RecordImport(
 		tx,
 		args.OriginID,
 		args.ItemTypeID,
 		srcConversation.ID,
-		iCID,
+		m.Id,
 	)
 	if err != nil {
 		glog.Errorf("Failed to recordImport: %+v", err)
@@ -163,32 +141,4 @@ func importConversation(args conc.Args, itemID int64) error {
 		glog.Infof("Successfully imported conversation %d", itemID)
 	}
 	return nil
-}
-
-// StoreConversation puts a conversation into the database
-func createConversation(tx *sql.Tx, c Conversation) (cID int64, err error) {
-
-	err = tx.QueryRow(`
-INSERT INTO conversations (
-    microcosm_id, title, created, created_by, is_sticky,
-    is_open, is_deleted, is_moderated, is_visible
-) VALUES (
-    $1, $2, $3, $4, $5,
-    $6, $7, $8, $9
-) RETURNING conversation_id;`,
-		c.MicrocosmID,
-		c.Title,
-		c.Created,
-		c.CreatedBy,
-		c.IsSticky,
-
-		c.IsOpen,
-		c.IsDeleted,
-		c.IsModerated,
-		c.IsVisible,
-	).Scan(
-		&cID,
-	)
-
-	return
 }

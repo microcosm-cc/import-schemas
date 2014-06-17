@@ -3,12 +3,14 @@ package imp
 import (
 	"database/sql"
 	"fmt"
+	"net"
 	"net/http"
 	"sync"
 
 	"github.com/golang/glog"
 
 	src "github.com/microcosm-cc/export-schemas/go/forum"
+	"github.com/microcosm-cc/microcosm/audit"
 	h "github.com/microcosm-cc/microcosm/helpers"
 	"github.com/microcosm-cc/microcosm/models"
 
@@ -148,6 +150,15 @@ func importProfile(args conc.Args, itemID int64) error {
 		glog.Errorf("Failed to commit transaction: %+v", err)
 		return err
 	}
+
+	audit.Create(
+		args.SiteID,
+		h.ItemTypes[h.ItemTypeProfile],
+		profileID,
+		profileID,
+		sp.DateCreated,
+		net.ParseIP(sp.IPAddress),
+	)
 
 	if glog.V(2) {
 		glog.Infof("Successfully imported profile %d", itemID)
