@@ -3,7 +3,6 @@ package imp
 import (
 	"database/sql"
 	"fmt"
-	"net"
 	"sync"
 
 	"github.com/cheggaaa/pb"
@@ -204,7 +203,7 @@ func importComment(args conc.Args, srcComment src.Comment) error {
 	comment.Meta.Flags.Deleted = srcComment.Deleted
 
 	// Import creates and commits/rollbacks its own transaction.
-	_, err := comment.Import(args.SiteID, net.ParseIP(srcComment.IPAddress))
+	_, err := comment.Import(args.SiteID)
 	if err != nil || comment.Id < 1 {
 		glog.Errorf("Failed to import comment for conversation %d: %s", srcComment.ID, err)
 		return err
