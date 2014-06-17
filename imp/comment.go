@@ -3,12 +3,15 @@ package imp
 import (
 	"database/sql"
 	"fmt"
+	"net"
 	"sync"
+	"time"
 
 	"github.com/cheggaaa/pb"
 	"github.com/golang/glog"
 
 	src "github.com/microcosm-cc/export-schemas/go/forum"
+	"github.com/microcosm-cc/microcosm/audit"
 	h "github.com/microcosm-cc/microcosm/helpers"
 	"github.com/microcosm-cc/microcosm/models"
 
@@ -30,11 +33,18 @@ func importComments(args conc.Args) (errors []error) {
 
 	// Comments.
 	args.ItemTypeID = h.ItemTypes[h.ItemTypeComment]
-	glog.Info("Loading comments...")
+	fmt.Println("Loading comment IDs...")
+	glog.Info("Loading comments IDs...")
 
+	startTime := time.Now()
 	err := files.WalkExportTree(args.RootPath, args.ItemTypeID)
 	if err != nil {
 		exitWithError(err, errors)
+	}
+	dur := time.Now().Sub(startTime).String()
+	fmt.Printf("Comments IDs loaded in %s\n", dur)
+	if glog.V(2) {
+		glog.Infof("Comments IDS loaded in %s\n", dur)
 	}
 
 	// Map of old comment ID to pointer of loaded comment and IDs of replies.
@@ -42,6 +52,7 @@ func importComments(args conc.Args) (errors []error) {
 	// Roots are comments where InReplyTo is 0.
 	roots := []int64{}
 
+	fmt.Println("Parsing comment files and threading comment tree")
 	commentIDs := files.GetIDs(args.ItemTypeID)
 	bar := pb.StartNew(len(commentIDs))
 
@@ -68,22 +79,34 @@ func importComments(args conc.Args) (errors []error) {
 		if srcComment.InReplyTo == 0 {
 			roots = append(roots, ID)
 		} else if srcComment.InReplyTo > 0 {
-			// Find the parent comment and append this node to the list of replies.
+			// Find the parent comment and append this node to the list of
+			// replies.
 			parent, ok := loadedNodeMap[srcComment.InReplyTo]
 			if ok {
 				parent.Replies = append(parent.Replies, &node)
 			} else {
 				// Parent not found, so treat this comment as a root.
-				glog.Infof("Could not find InReplyTo: %d for comment %d\n", srcComment.InReplyTo, ID)
+				if glog.V(2) {
+					glog.Infof(
+						"Could not find InReplyTo: %d for comment %d\n",
+						srcComment.InReplyTo,
+						ID,
+					)
+				}
+				srcComment.InReplyTo = 0
 				roots = append(roots, ID)
 			}
 		}
 	}
 	bar.Finish()
 
-	glog.Info("Found %d comments without parents\n", len(roots))
+	if glog.V(2) {
+		glog.Info("Found %d comments without parents\n", len(roots))
+	}
 
-	// Iterate the roots, storing each root first, then doing breadth-first traversal and storing all replies.
+	// Iterate the roots, storing each root first, then doing breadth-first
+	// traversal and storing all replies.
+	fmt.Println("Importing comments")
 	taskBar := pb.StartNew(len(roots))
 	var wg sync.WaitGroup
 	tasks := make(chan int64, len(roots)+1)
@@ -109,7 +132,9 @@ func importComments(args conc.Args) (errors []error) {
 		tasks <- id
 	}
 	close(tasks)
-	glog.Info("Waiting for comment tasks to finish\n")
+	if glog.V(2) {
+		glog.Info("Waiting for comment tasks to finish\n")
+	}
 	wg.Wait()
 	taskBar.Finish()
 
@@ -133,7 +158,9 @@ func importComment(args conc.Args, srcComment src.Comment) error {
 
 	// Skip if comment already imported.
 	if accounting.GetNewID(args.OriginID, args.ItemTypeID, srcComment.ID) > 0 {
-		glog.Infof("Skipping already-imported comment %d\n", srcComment.ID)
+		if glog.V(2) {
+			glog.Infof("Skipping already-imported comment %d\n", srcComment.ID)
+		}
 		return nil
 	}
 
@@ -145,7 +172,9 @@ func importComment(args conc.Args, srcComment src.Comment) error {
 	)
 	if createdByID == 0 {
 		createdByID = args.DeletedProfileID
-		glog.Infof("Using deleted profile for profile ID %d\n", srcComment.Author)
+		if glog.V(2) {
+			glog.Infof("Using deleted profile for profile ID %d\n", srcComment.Author)
+		}
 	}
 
 	// Determine which new conversation ID this comment belongs to.
@@ -173,11 +202,13 @@ func importComment(args conc.Args, srcComment src.Comment) error {
 		if replyToID > 0 {
 			srcComment.InReplyTo = replyToID
 		} else {
-			glog.Infof(
-				"InReplyTo comment ID %d (needed by comment %d) does not have an imported ID\n",
-				srcComment.InReplyTo,
-				srcComment.ID,
-			)
+			if glog.V(2) {
+				glog.Infof(
+					"InReplyTo comment ID %d (needed by comment %d) does not have an imported ID\n",
+					srcComment.InReplyTo,
+					srcComment.ID,
+				)
+			}
 		}
 	}
 
@@ -231,6 +262,20 @@ func importComment(args conc.Args, srcComment src.Comment) error {
 	if err != nil {
 		glog.Errorf("Failed to commit transaction: %+v", err)
 		return err
+	}
+
+	// Log the IP address
+	audit.Create(
+		args.SiteID,
+		h.ItemTypes[h.ItemTypeComment],
+		comment.Id,
+		createdByID,
+		srcComment.DateCreated,
+		net.ParseIP(srcComment.IPAddress),
+	)
+
+	if glog.V(2) {
+		glog.Infof("Successfully imported comment %d", srcComment.ID)
 	}
 
 	return nil
