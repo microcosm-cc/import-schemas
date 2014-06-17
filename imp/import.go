@@ -92,6 +92,14 @@ func Import() {
 		glog.Flush()
 	}
 
+	// Import follows.
+	errs = importFollows(args, gophers)
+	if len(errs) > 0 {
+		for _, err := range errs {
+			glog.Error(err)
+		}
+		glog.Flush()
+	}
 }
 
 func exitWithError(fatal error, errors []error) {
