@@ -1,6 +1,7 @@
 package files
 
 import (
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -109,14 +110,14 @@ func GetIDs(itemTypeID int64) []int64 {
 	return keys
 }
 
-func addPath(itemTypeID int64, path string) {
+func addPath(itemTypeID int64, name string) {
 	// path will be of the format:
 	//   "users/321/231/1.json"
 	// We need to get to:
 	//   [3212311] = "users/321/231/1.json"
 	// And we do this by stripping off the path prefix which is determined by
 	// the itemTypeID
-	filePath := strings.Split(path, getPathForItemType(itemTypeID))[1]
+	filePath := strings.Split(name, getPathForItemType(itemTypeID))[1]
 
 	// Removing the file extension
 	filePath = strings.Split(filePath, ".json")[0]
@@ -136,42 +137,42 @@ func addPath(itemTypeID int64, path string) {
 
 	case h.ItemTypes[h.ItemTypeAttachment]:
 		attachmentIDsToPathsLock.Lock()
-		attachmentIDsToPaths[id] = path
+		attachmentIDsToPaths[id] = name
 		attachmentIDsToPathsLock.Unlock()
 
 	case h.ItemTypes[h.ItemTypeComment]:
 		commentIDsToPathsLock.Lock()
-		commentIDsToPaths[id] = path
+		commentIDsToPaths[id] = name
 		commentIDsToPathsLock.Unlock()
 
 	case h.ItemTypes[h.ItemTypeConversation]:
 		conversationIDsToPathsLock.Lock()
-		conversationIDsToPaths[id] = path
+		conversationIDsToPaths[id] = name
 		conversationIDsToPathsLock.Unlock()
 
 	case h.ItemTypes[h.ItemTypeHuddle]:
 		huddleIDsToPathsLock.Lock()
-		huddleIDsToPaths[id] = path
+		huddleIDsToPaths[id] = name
 		huddleIDsToPathsLock.Unlock()
 
 	case h.ItemTypes[h.ItemTypeMicrocosm]:
 		microcosmIDsToPathsLock.Lock()
-		microcosmIDsToPaths[id] = path
+		microcosmIDsToPaths[id] = name
 		microcosmIDsToPathsLock.Unlock()
 
 	case h.ItemTypes[h.ItemTypeProfile]:
 		profileIDsToPathsLock.Lock()
-		profileIDsToPaths[id] = path
+		profileIDsToPaths[id] = name
 		profileIDsToPathsLock.Unlock()
 
 	case h.ItemTypes[h.ItemTypeRole]:
 		roleIDsToPathsLock.Lock()
-		roleIDsToPaths[id] = path
+		roleIDsToPaths[id] = name
 		roleIDsToPathsLock.Unlock()
 
 	case h.ItemTypes[h.ItemTypeWatcher]:
 		watcherIDsToPathsLock.Lock()
-		watcherIDsToPaths[id] = path
+		watcherIDsToPaths[id] = name
 		watcherIDsToPathsLock.Unlock()
 
 	default:
@@ -182,7 +183,7 @@ func addPath(itemTypeID int64, path string) {
 // GetPath returns the path to a .json file for a given itemTypeID and itemID
 func GetPath(itemTypeID int64, itemID int64) string {
 	var (
-		path string
+		name string
 		ok   bool
 	)
 
@@ -190,42 +191,42 @@ func GetPath(itemTypeID int64, itemID int64) string {
 
 	case h.ItemTypes[h.ItemTypeAttachment]:
 		attachmentIDsToPathsLock.Lock()
-		path, ok = attachmentIDsToPaths[itemID]
+		name, ok = attachmentIDsToPaths[itemID]
 		attachmentIDsToPathsLock.Unlock()
 
 	case h.ItemTypes[h.ItemTypeComment]:
 		commentIDsToPathsLock.Lock()
-		path, ok = commentIDsToPaths[itemID]
+		name, ok = commentIDsToPaths[itemID]
 		commentIDsToPathsLock.Unlock()
 
 	case h.ItemTypes[h.ItemTypeConversation]:
 		conversationIDsToPathsLock.Lock()
-		path, ok = conversationIDsToPaths[itemID]
+		name, ok = conversationIDsToPaths[itemID]
 		conversationIDsToPathsLock.Unlock()
 
 	case h.ItemTypes[h.ItemTypeHuddle]:
 		huddleIDsToPathsLock.Lock()
-		path, ok = huddleIDsToPaths[itemID]
+		name, ok = huddleIDsToPaths[itemID]
 		huddleIDsToPathsLock.Unlock()
 
 	case h.ItemTypes[h.ItemTypeMicrocosm]:
 		microcosmIDsToPathsLock.Lock()
-		path, ok = microcosmIDsToPaths[itemID]
+		name, ok = microcosmIDsToPaths[itemID]
 		microcosmIDsToPathsLock.Unlock()
 
 	case h.ItemTypes[h.ItemTypeProfile]:
 		profileIDsToPathsLock.Lock()
-		path, ok = profileIDsToPaths[itemID]
+		name, ok = profileIDsToPaths[itemID]
 		profileIDsToPathsLock.Unlock()
 
 	case h.ItemTypes[h.ItemTypeRole]:
 		roleIDsToPathsLock.Lock()
-		path, ok = roleIDsToPaths[itemID]
+		name, ok = roleIDsToPaths[itemID]
 		roleIDsToPathsLock.Unlock()
 
 	case h.ItemTypes[h.ItemTypeWatcher]:
 		watcherIDsToPathsLock.Lock()
-		path, ok = watcherIDsToPaths[itemID]
+		name, ok = watcherIDsToPaths[itemID]
 		watcherIDsToPathsLock.Unlock()
 
 	default:
@@ -241,5 +242,5 @@ func GetPath(itemTypeID int64, itemID int64) string {
 		return ""
 	}
 
-	return path
+	return path.Join(rootpath, name)
 }
