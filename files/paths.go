@@ -25,7 +25,7 @@ func getPathForItemType(itemTypeID int64) string {
 		path = src.ConversationsPath
 
 	case h.ItemTypes[h.ItemTypeWatcher]:
-		path = src.ForumsPath
+		path = src.FollowsPath
 
 	case h.ItemTypes[h.ItemTypeHuddle]:
 		path = src.MessagesPath
