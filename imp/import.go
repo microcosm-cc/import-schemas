@@ -87,8 +87,8 @@ func Import() {
 		return
 	}
 
-	// Import follows.
-	errs = importFollows(args, 50)
+	// Import comments.
+	errs = importComments(args, 25)
 	if len(errs) > 0 {
 		for _, err := range errs {
 			glog.Error(err)
@@ -96,8 +96,8 @@ func Import() {
 		glog.Flush()
 	}
 
-	// Import comments.
-	errs = importComments(args, gophers)
+	// Import follows.
+	errs = importFollows(args, 50)
 	if len(errs) > 0 {
 		for _, err := range errs {
 			glog.Error(err)
