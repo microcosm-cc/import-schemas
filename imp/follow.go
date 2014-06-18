@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/golang/glog"
+	"strings"
 
 	src "github.com/microcosm-cc/export-schemas/go/forum"
 	h "github.com/microcosm-cc/microcosm/helpers"
@@ -35,17 +36,14 @@ func importFollows(args conc.Args, gophers int) (errors []error) {
 
 }
 
-// For each follow file, map the old profile ID (and follwoing profile ID) to new ones.
+// For each follow file, map the old profile ID (and following profile ID) to new ones.
 // If there are any conversation follows, map to new ID.
 // Notify: true sets the email field to true. Ignore SMS.
 // Follow is one follow record, this implies multiple watchers.
 func importFollow(args conc.Args, itemID int64) error {
 
-	// Does this miss some follows if one has already been imported?
 	if accounting.GetNewID(args.OriginID, args.ItemTypeID, itemID) > 0 {
-		if glog.V(2) {
-			glog.Infof("Skipping watchers for profile %d", itemID)
-		}
+		glog.Infof("Skipping watchers for profile %d", itemID)
 		return nil
 	}
 
@@ -73,6 +71,7 @@ func importFollow(args conc.Args, itemID int64) error {
 
 	// Users following
 	for _, user := range srcFollow.Users {
+		// Fetch the new profile ID of user being followed.
 		followPID := accounting.GetNewID(
 			args.OriginID,
 			h.ItemTypes[h.ItemTypeProfile],
@@ -86,7 +85,10 @@ func importFollow(args conc.Args, itemID int64) error {
 		}
 		_, err := w.Import()
 		if err != nil {
-			glog.Error(err.Error())
+			// Ignore complaints about non-uniques
+			if !strings.Contains(err.Error(), "unique") {
+				glog.Error(err.Error())
+			}
 		}
 	}
 
@@ -105,7 +107,10 @@ func importFollow(args conc.Args, itemID int64) error {
 		}
 		_, err := w.Import()
 		if err != nil {
-			glog.Error(err.Error())
+			// Ignore complaints about non-uniques
+			if !strings.Contains(err.Error(), "unique") {
+				glog.Error(err.Error())
+			}
 		}
 	}
 
@@ -124,9 +129,28 @@ func importFollow(args conc.Args, itemID int64) error {
 		}
 		_, err := w.Import()
 		if err != nil {
-			glog.Error(err.Error())
+			// Ignore complaints about non-uniques
+			if !strings.Contains(err.Error(), "unique") {
+				glog.Error(err.Error())
+			}
 		}
 	}
 
+	// One follow ID will map to multiple watcher IDs.
+	// Store a '1' for the new follow ID value, to signify
+	// that all follows for the current profile have been processed.
+	tx, err := h.GetTransaction()
+	if err != nil {
+		glog.Error(err.Error())
+		return err
+	}
+	err = accounting.RecordImport(tx, args.OriginID, args.ItemTypeID, itemID, 1)
+	if err != nil {
+		glog.Error(err.Error())
+	}
+	err = tx.Commit()
+	if err != nil {
+		glog.Error(err.Error())
+	}
 	return err
 }
