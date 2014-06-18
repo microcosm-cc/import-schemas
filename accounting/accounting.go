@@ -17,15 +17,18 @@ import (
 // Absence from this means that the item has not been imported
 var (
 	microcosms        map[int64]int64
-	microcosmsLock    sync.Mutex
+	microcosmsLock    sync.RWMutex
 	conversations     map[int64]int64
-	conversationsLock sync.Mutex
+	conversationsLock sync.RWMutex
 	comments          map[int64]int64
-	commentsLock      sync.Mutex
+	commentsLock      sync.RWMutex
 
 	// Note that this actually looks up old userIDs and returns profileIDs
 	profiles     map[int64]int64
-	profilesLock sync.Mutex
+	profilesLock sync.RWMutex
+
+	watchers     map[int64]int64
+	watchersLock sync.RWMutex
 )
 
 // CreateImportOrigin records in Postgres that we are about to start an import
@@ -120,6 +123,11 @@ func updateStateMap(
 		comments[oldID] = newID
 		commentsLock.Unlock()
 
+	case h.ItemTypes[h.ItemTypeWatcher]:
+		watchersLock.Lock()
+		watchers[oldID] = newID
+		watchersLock.Unlock()
+
 	default:
 		glog.Fatal(fmt.Errorf("Not yet implemented for %d", itemTypeID))
 	}
@@ -137,32 +145,39 @@ func GetNewID(
 
 	switch itemTypeID {
 	case h.ItemTypes[h.ItemTypeMicrocosm]:
-		microcosmsLock.Lock()
+		microcosmsLock.RLock()
 		if newID, ok := microcosms[oldID]; ok {
 			itemID = newID
 		}
-		microcosmsLock.Unlock()
+		microcosmsLock.RUnlock()
 
 	case h.ItemTypes[h.ItemTypeProfile]:
-		profilesLock.Lock()
+		profilesLock.RLock()
 		if newID, ok := profiles[oldID]; ok {
 			itemID = newID
 		}
-		profilesLock.Unlock()
+		profilesLock.RUnlock()
 
 	case h.ItemTypes[h.ItemTypeConversation]:
-		conversationsLock.Lock()
+		conversationsLock.RLock()
 		if newID, ok := conversations[oldID]; ok {
 			itemID = newID
 		}
-		conversationsLock.Unlock()
+		conversationsLock.RUnlock()
 
 	case h.ItemTypes[h.ItemTypeComment]:
-		commentsLock.Lock()
+		commentsLock.RLock()
 		if newID, ok := comments[oldID]; ok {
 			itemID = newID
 		}
-		commentsLock.Unlock()
+		commentsLock.RUnlock()
+
+	case h.ItemTypes[h.ItemTypeWatcher]:
+		watchersLock.RLock()
+		if newID, ok := watchers[oldID]; ok {
+			itemID = newID
+		}
+		watchersLock.RUnlock()
 
 	default:
 		glog.Fatal(fmt.Errorf("Not yet implemented for %d", itemTypeID))
