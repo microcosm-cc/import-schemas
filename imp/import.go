@@ -100,7 +100,7 @@ func Import() {
 	}
 
 	// Import follows.
-	errs = importFollows(args, 50)
+	errs = importFollows(args, gophers)
 	if len(errs) > 0 {
 		for _, err := range errs {
 			glog.Error(err)
