@@ -58,6 +58,12 @@ func importComments(args conc.Args, gophers int) []error {
 	)
 	errs = append(errs, errs2...)
 
+	// Update comment counts for all users
+	_, err = models.UpdateCommentCountForAllProfiles(args.SiteID)
+	if err != nil {
+		errs = append(errs, err)
+	}
+
 	return errs
 }
 

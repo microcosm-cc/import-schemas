@@ -81,7 +81,7 @@ func createDeletedProfile(args conc.Args) (int64, error) {
 }
 
 // importProfiles iterates the profiles and imports each individually
-func importProfiles(args conc.Args, gophers int) (errors []error) {
+func importProfiles(args conc.Args, gophers int) []error {
 
 	fmt.Println("Importing profiles...")
 	glog.Info("Importing profiles...")
