@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"sync"
+	"path"
+	"strings"
+	// "sync"
 
 	"github.com/golang/glog"
 
@@ -16,6 +18,7 @@ import (
 
 	"github.com/microcosm-cc/import-schemas/accounting"
 	"github.com/microcosm-cc/import-schemas/conc"
+	"github.com/microcosm-cc/import-schemas/config"
 	"github.com/microcosm-cc/import-schemas/files"
 )
 
@@ -23,7 +26,7 @@ import (
 // microcosm models are forced into a single region of code. That is, we are
 // forcing multiple functions that have their own transactions to run as a
 // single block so that we do not encounter race conditions
-var profileLock sync.Mutex
+// var profileLock sync.Mutex
 
 // loadProfiles from JSON files into the files/maps.go knowledge of what exists
 // and returns the owner (as specified in the config file) as a src.Profile{}.
@@ -83,17 +86,54 @@ func createDeletedProfile(args conc.Args) (int64, error) {
 // importProfiles iterates the profiles and imports each individually
 func importProfiles(args conc.Args, gophers int) []error {
 
-	fmt.Println("Importing profiles...")
-	glog.Info("Importing profiles...")
-
 	args.ItemTypeID = h.ItemTypes[h.ItemTypeProfile]
 
-	// Import users and create a profile for each.
-	return conc.RunTasks(
-		files.GetIDs(args.ItemTypeID),
-		args,
-		importProfile,
-		gophers,
+	// We may have an index.json file to guide us, if we do let's use it to
+	// figure out our dupes and do things in two passes with high concurrency,
+	// otherwise we need to do everything sequentially in a single process.
+
+	indexFile := path.Join(config.Rootpath, src.ProfilesPath, "index.json")
+	if !files.Exists(indexFile) {
+		// Index file did not exist, sequential it is.
+		fmt.Println("Importing profiles...")
+		glog.Info("Importing profiles...")
+
+		return conc.RunTasks(
+			files.GetIDs(args.ItemTypeID),
+			args,
+			importProfile,
+			1,
+		)
+	}
+
+	fmt.Println("Importing profiles (2-pass)...")
+	glog.Info("Importing profiles (2-pass)...")
+
+	// indexFile exists, load it and figure out duplicates
+	di := src.DirIndex{}
+	err := files.JSONFileToInterface(indexFile, &di)
+	if err != nil {
+		return []error{err}
+	}
+
+	emails := make(map[string]bool)
+	firstPass := []int64{}
+	secondPass := []int64{}
+	for _, df := range di.Files {
+		email := strings.ToLower(df.Email)
+		if _, ok := emails[email]; ok {
+			secondPass = append(secondPass, df.ID)
+			continue
+		}
+
+		emails[email] = true
+		firstPass = append(firstPass, df.ID)
+	}
+
+	errs := conc.RunTasks(firstPass, args, importProfile, gophers)
+	return append(
+		errs,
+		conc.RunTasks(secondPass, args, importProfile, gophers)...,
 	)
 }
 
@@ -169,8 +209,8 @@ func importProfile(args conc.Args, itemID int64) error {
 // createProfile puts a profile into the database via microcosm models
 func createProfile(args conc.Args, sp src.Profile) (int64, error) {
 
-	profileLock.Lock()
-	defer profileLock.Unlock()
+	// profileLock.Lock()
+	// defer profileLock.Unlock()
 
 	u, status, err := models.GetUserByEmailAddress(sp.Email)
 	if err != nil && status != http.StatusNotFound {

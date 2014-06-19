@@ -9,7 +9,10 @@ import (
 	"github.com/microcosm-cc/import-schemas/config"
 )
 
-const gophers int = 100
+// We should only use 50 gophers as we expect each one to trigger database
+// connections and eventually we need this to run on a live site without
+// breaking it
+const gophers int = 50
 
 // Import orchestrates and runs the import job, ensuring that any dependencies
 // are imported before they are needed. This is mostly a top level ordering of
@@ -49,7 +52,7 @@ func Import() {
 	// Import all other users.
 	// NOTE: Can only use 1 gopher as users may have multiple profiles and we
 	// wish to only keep the oldest (lowest numbered) profile.
-	errs := importProfiles(args, 1)
+	errs := importProfiles(args, gophers)
 	if len(errs) > 0 {
 		for _, err := range errs {
 			glog.Error(err)

@@ -21,7 +21,7 @@ import (
 // and so on for all paths within the directory structure
 func WalkExportTree(rootPath string, itemTypeID int64) error {
 	indexFile := path.Join(rootPath, getPathForItemType(itemTypeID), "index.json")
-	if exists(indexFile) {
+	if Exists(indexFile) {
 		return loadIndex(rootPath, indexFile, itemTypeID)
 	}
 
