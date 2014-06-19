@@ -29,7 +29,7 @@ func WalkExportTree(rootPath string, itemTypeID int64) error {
 }
 
 func doWalk(rootPath string, itemTypeID int64) error {
-	fmt.Println("Walking tree")
+	glog.Info("Walking tree")
 	// Define what should be done in the subsequent directory walk.
 	walk := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -52,7 +52,7 @@ func doWalk(rootPath string, itemTypeID int64) error {
 }
 
 func loadIndex(rootPath string, indexFile string, itemTypeID int64) error {
-	fmt.Println("Loading index")
+	glog.Info("Loading index")
 	dirIndex := src.DirIndex{}
 	err := JSONFileToInterface(indexFile, &dirIndex)
 	if err != nil {
