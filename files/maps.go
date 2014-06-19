@@ -1,7 +1,7 @@
 package files
 
 import (
-	"path"
+	// "path"
 	"sort"
 	"strconv"
 	"strings"
@@ -242,5 +242,5 @@ func GetPath(itemTypeID int64, itemID int64) string {
 		return ""
 	}
 
-	return path.Join(rootpath, name)
+	return name
 }
