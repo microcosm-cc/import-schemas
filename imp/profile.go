@@ -256,8 +256,5 @@ func createProfile(args conc.Args, sp src.Profile) (int64, error) {
 		return 0, err
 	}
 
-	if glog.V(2) {
-		glog.Infof("Successfully created profile %d", p.Id)
-	}
 	return p.Id, nil
 }
