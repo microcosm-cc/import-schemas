@@ -110,26 +110,30 @@ func GetIDs(itemTypeID int64) []int64 {
 	return keys
 }
 
-func addPath(itemTypeID int64, name string) {
-	// path will be of the format:
-	//   "users/321/231/1.json"
-	// We need to get to:
-	//   [3212311] = "users/321/231/1.json"
-	// And we do this by stripping off the path prefix which is determined by
-	// the itemTypeID
-	filePath := strings.Split(name, getPathForItemType(itemTypeID))[1]
+func addPath(itemTypeID int64, name string, id int64) {
+	if id == 0 {
 
-	// Removing the file extension
-	filePath = strings.Split(filePath, ".json")[0]
+		// path will be of the format:
+		//   "users/321/231/1.json"
+		// We need to get to:
+		//   [3212311] = "users/321/231/1.json"
+		// And we do this by stripping off the path prefix which is determined by
+		// the itemTypeID
+		filePath := strings.Split(name, getPathForItemType(itemTypeID))[1]
 
-	// Removing path delimiters
-	filePath = strings.Replace(filePath, "/", "", -1)
+		// Removing the file extension
+		filePath = strings.Split(filePath, ".json")[0]
 
-	// And converting it to an int64
-	id, err := strconv.ParseInt(filePath, 10, 64)
-	if err != nil {
-		glog.Errorf("Failed to parseInt %s %+v", filePath, err)
-		return
+		// Removing path delimiters
+		filePath = strings.Replace(filePath, "/", "", -1)
+
+		// And converting it to an int64
+		var err error
+		id, err = strconv.ParseInt(filePath, 10, 64)
+		if err != nil {
+			glog.Errorf("Failed to parseInt %s %+v", filePath, err)
+			return
+		}
 	}
 
 	// Finally we add the path to the approprate map

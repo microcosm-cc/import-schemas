@@ -11,6 +11,8 @@
 #
 #   install:      Builds, tests and installs the code locally
 
+.PHONY: all fmt build vet lint test clean install race
+
 # Sub-directories containing code to be vetted or linted
 CODE = accounting conc config files imp
 
@@ -19,29 +21,31 @@ CODE = accounting conc config files imp
 all: clean fmt vet test install
 
 fmt:
-	gofmt -w ./$*
+	@gofmt -w ./$*
 
+build: export GOOS=linux
+build: export GOARCH=amd64
 build: clean
-	GOOS=linux GOARCH=amd64 go build
+	@go build
 
 vet:
-	go tool vet $(CODE)
-	go tool vet main.go
+	@go tool vet $(CODE)
+	@go tool vet main.go
 
 lint:
-	golint $(CODE)
-	golint main.go
+	@golint $(CODE)
+	@golint main.go
 
 test:
-	go test -v -cover ./...
+	@go test -v -cover ./...
 
 clean:
-	find $(GOPATH)/bin -name import-schemas -delete
-	find . -name import-schemas -delete
+	@find $(GOPATH)/bin -name import-schemas -delete
+	@find . -name import-schemas -delete
 
 install: clean
-	go install
+	@go install
 
 race: clean fmt vet test
-	go build -race
-	mv import-schemas $(GOPATH)/bin/
+	@go build -race
+	@mv import-schemas $(GOPATH)/bin/
