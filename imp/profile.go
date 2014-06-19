@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"path"
 	"strings"
-	// "sync"
 
 	"github.com/golang/glog"
 
@@ -21,12 +20,6 @@ import (
 	"github.com/microcosm-cc/import-schemas/config"
 	"github.com/microcosm-cc/import-schemas/files"
 )
-
-// profileLock is used to ensure that several different queries against
-// microcosm models are forced into a single region of code. That is, we are
-// forcing multiple functions that have their own transactions to run as a
-// single block so that we do not encounter race conditions
-// var profileLock sync.Mutex
 
 // loadProfiles from JSON files into the files/maps.go knowledge of what exists
 // and returns the owner (as specified in the config file) as a src.Profile{}.
@@ -208,9 +201,6 @@ func importProfile(args conc.Args, itemID int64) error {
 
 // createProfile puts a profile into the database via microcosm models
 func createProfile(args conc.Args, sp src.Profile) (int64, error) {
-
-	// profileLock.Lock()
-	// defer profileLock.Unlock()
 
 	u, status, err := models.GetUserByEmailAddress(sp.Email)
 	if err != nil && status != http.StatusNotFound {
