@@ -3,6 +3,7 @@ package imp
 import (
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 
 	"github.com/golang/glog"
@@ -139,9 +140,12 @@ func importComment(args conc.Args, itemID int64) error {
 
 	// Import creates and commits/rollbacks its own transaction.
 	_, err = m.Import(args.SiteID)
-	if err != nil || m.Id < 1 {
-		glog.Errorf("Failed to import comment for conversation %d: %s", srcComment.ID, err)
-		return err
+	if err != nil {
+		// Ignore errors relating to link embedding.
+		if !strings.Contains(err.Error(), "links_url_key") {
+			glog.Errorf("Failed to import comment for conversation %d: %s", srcComment.ID, err)
+			return err
+		}
 	}
 
 	tx, err := h.GetTransaction()
