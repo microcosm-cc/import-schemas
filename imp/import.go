@@ -97,6 +97,10 @@ func Import() {
 			glog.Error(err)
 		}
 		glog.Flush()
+
+		// If we have errors we do not continue. Errors importing comments
+		// cascade significantly as attachments are associated to the comments.
+		return
 	}
 
 	// Import follows.

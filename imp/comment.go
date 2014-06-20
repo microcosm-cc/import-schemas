@@ -31,8 +31,6 @@ func importComments(args conc.Args, gophers int) []error {
 
 	args.ItemTypeID = h.ItemTypes[h.ItemTypeComment]
 
-	fmt.Println("Walking comment tree...")
-	glog.Info("Walking comment tree...")
 	err := files.WalkExportTree(args.RootPath, args.ItemTypeID)
 	if err != nil {
 		exitWithError(err, []error{})
