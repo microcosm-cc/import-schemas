@@ -7,4 +7,5 @@ func init() {
 	comments = map[int64]int64{}
 	profiles = map[int64]int64{}
 	watchers = map[int64]int64{}
+	huddles = map[int64]int64{}
 }
