@@ -111,12 +111,15 @@ func importComment(args conc.Args, itemID int64) error {
 		srcComment.Association.OnID,
 	)
 	if conversationID == 0 {
-		return fmt.Errorf(
-			"Exported conversation ID %d does not have an imported ID, "+
-				"skipped comment %d\n",
-			srcComment.Association.OnID,
-			srcComment.ID,
-		)
+		if glog.V(2) {
+			glog.Infof(
+				"Exported conversation ID %d does not have an imported ID, "+
+					"comment %d is an orphan\n",
+				srcComment.Association.OnID,
+				srcComment.ID,
+			)
+		}
+		return nil
 	}
 
 	// Store the inReplyTo for post-processing
