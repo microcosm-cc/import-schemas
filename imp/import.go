@@ -111,6 +111,24 @@ func Import() {
 		}
 		glog.Flush()
 	}
+
+	// TODO: Import messages here
+
+	// TODO: Import attachments here
+	//
+	// Can be highly concurrent as nearly all activity here is going to be disk
+	// and network limited... perhaps 100+ gophers?
+
+	// TODO: Import roles here
+	//
+	// Roles must be the very last thing we do, as once we add permissions we
+	// will be securing the site and a lot of the prior imports would fail if
+	// the permissions today didn't precisely match the permissions at the time
+	// that content was created... which is extremely unlikely.
+	//
+	// As a result, we shouldn't import roles until we are sure we got here
+	// without error, as roles will reduce the overall resumability of an import
+
 }
 
 func exitWithError(fatal error, errors []error) {
