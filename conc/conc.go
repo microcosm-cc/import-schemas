@@ -15,8 +15,8 @@ type Args struct {
 	RootPath           string
 	SiteID             int64
 	OriginID           int64
-	ItemTypeID         int64
 	SiteOwnerProfileID int64
+	ItemTypeID         int64
 	DeletedProfileID   int64
 }
 

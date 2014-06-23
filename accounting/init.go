@@ -8,4 +8,5 @@ func init() {
 	profiles = map[int64]int64{}
 	watchers = map[int64]int64{}
 	huddles = map[int64]int64{}
+	attachments = map[int64]int64{}
 }

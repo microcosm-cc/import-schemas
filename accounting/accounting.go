@@ -32,6 +32,9 @@ var (
 
 	huddles     map[int64]int64
 	huddlesLock sync.RWMutex
+
+	attachments     map[int64]int64
+	attachmentsLock sync.RWMutex
 )
 
 // CreateImportOrigin records in Postgres that we are about to start an import
@@ -136,6 +139,11 @@ func updateStateMap(
 		huddles[oldID] = newID
 		huddlesLock.Unlock()
 
+	case h.ItemTypes[h.ItemTypeAttachment]:
+		attachmentsLock.Lock()
+		attachments[oldID] = newID
+		attachmentsLock.Unlock()
+
 	default:
 		glog.Fatal(fmt.Errorf("Not yet implemented for %d", itemTypeID))
 	}
@@ -193,6 +201,13 @@ func GetNewID(
 			itemID = newID
 		}
 		huddlesLock.RUnlock()
+
+	case h.ItemTypes[h.ItemTypeAttachment]:
+		attachmentsLock.RLock()
+		if newID, ok := attachments[oldID]; ok {
+			itemID = newID
+		}
+		attachmentsLock.RUnlock()
 
 	default:
 		glog.Fatal(fmt.Errorf("Not yet implemented for %d", itemTypeID))
