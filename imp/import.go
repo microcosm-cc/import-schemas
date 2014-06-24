@@ -91,7 +91,7 @@ func Import() {
 	}
 
 	// Import comments.
-	errs = importComments(args, 25)
+	/*errs = importComments(args, 25)
 	if len(errs) > 0 {
 		for _, err := range errs {
 			glog.Error(err)
@@ -121,7 +121,7 @@ func Import() {
 		glog.Flush()
 
 		return
-	}
+	}*/
 
 	// TODO: Import messages here
 
@@ -129,7 +129,7 @@ func Import() {
 	//
 	// Can be highly concurrent as nearly all activity here is going to be disk
 	// and network limited... perhaps 100+ gophers?
-	errs = importAttachments(args, gophers)
+	errs = importAttachments(args, 1)
 	if len(errs) > 0 {
 		for _, err := range errs {
 			glog.Error(err)
