@@ -77,18 +77,18 @@ func Import() {
 		return
 	}
 
-	// Import conversations.
-	errs = importConversations(args, gophers)
-	if len(errs) > 0 {
-		for _, err := range errs {
-			glog.Error(err)
-		}
-		glog.Flush()
+	// // Import conversations.
+	// errs = importConversations(args, gophers)
+	// if len(errs) > 0 {
+	// 	for _, err := range errs {
+	// 		glog.Error(err)
+	// 	}
+	// 	glog.Flush()
 
-		// If we have errors we do not continue. Errors importing conversations
-		// cascade significantly as comments are associated to the conversations.
-		return
-	}
+	// 	// If we have errors we do not continue. Errors importing conversations
+	// 	// cascade significantly as comments are associated to the conversations.
+	// 	return
+	// }
 
 	// // Import comments.
 	// errs = importComments(args, 25)
