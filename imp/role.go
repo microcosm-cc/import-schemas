@@ -53,10 +53,10 @@ func importRoles(args conc.Args, gophers int) []error {
 	// 1.2 Load roles into a slice of fully constructed roles
 	oldRoleIDS := files.GetIDs(args.ItemTypeID)
 
-	for _, roleID := range oldRoleIDS {
+	for _, oldRoleId := range oldRoleIDS {
 		srcRole := src.Role{}
 		err := files.JSONFileToInterface(
-			files.GetPath(args.ItemTypeID, roleID),
+			files.GetPath(args.ItemTypeID, oldRoleId),
 			&srcRole,
 		)
 		if err != nil {
@@ -65,7 +65,7 @@ func importRoles(args conc.Args, gophers int) []error {
 		}
 
 		role := models.RoleType{}
-		role.Id = srcRole.ID
+		role.Id = 0
 		role.SiteId = args.SiteID
 		role.Title = srcRole.Name
 		role.IsBanned = srcRole.Banned
@@ -123,7 +123,7 @@ func importRoles(args conc.Args, gophers int) []error {
 			role.Criteria = append(role.Criteria, nc)
 		}
 
-		roles[role.Id] = role
+		roles[oldRoleId] = role
 
 		if srcRole.DefaultRole {
 			defaultRoles[srcRole.ID] = true
@@ -144,16 +144,22 @@ func importRoles(args conc.Args, gophers int) []error {
 			continue
 		}
 
-		role, _ := roles[oldRoleId]
+		role, ok := roles[oldRoleId]
+		if !ok {
+			glog.Error(fmt.Errorf("Expected role for %d", oldRoleId))
+			continue
+		}
 
 		_, err := role.Insert(args.SiteID, args.SiteOwnerProfileID)
 		if err != nil {
+			glog.Errorf("%s %+v", err, role)
 			return []error{err}
 		}
 
 		for _, c := range role.Criteria {
 			_, err := c.Insert(role.Id)
 			if err != nil {
+				glog.Error(err)
 				return []error{err}
 			}
 		}
@@ -161,6 +167,7 @@ func importRoles(args conc.Args, gophers int) []error {
 		for _, p := range role.Profiles {
 			_, err := p.Update(args.SiteID, role.Id)
 			if err != nil {
+				glog.Error(err)
 				return []error{err}
 			}
 		}
@@ -239,16 +246,57 @@ func importRoles(args conc.Args, gophers int) []error {
 			return []error{err}
 		}
 
-		if len(srcForum.Moderators) > 0 {
-			fmt.Printf("Forum %d has %d moderators\n", forumID, len(srcForum.Moderators))
-		}
-		// for _, modID := range srcForum.Moderators {
-		// 	forumMods[srcForum.ID] = append(forumMods[srcForum.ID], modID.ID)
-		// }
+		// No custom usergroups, but we do have moderators... so we'll add a
+		// moderator role and assign the people
+		if len(srcForum.Moderators) > 0 && len(srcForum.Usergroups) == 0 {
+			modRole := models.RoleType{}
+			modRole.SiteId = args.SiteID
+			modRole.MicrocosmId = accounting.GetNewID(
+				args.OriginID,
+				h.ItemTypes[h.ItemTypeMicrocosm],
+				forumID,
+			)
+			if modRole.MicrocosmId == 0 {
+				continue
+			}
+			modRole.Title = "Moderators"
+			modRole.IsModerator = true
+			modRole.CanRead = true
+			modRole.CanReadOthers = true
+			modRole.CanCreate = true
+			modRole.CanUpdate = true
+			modRole.CanDelete = true
+			modRole.CanCloseOwn = true
+			modRole.CanOpenOwn = true
 
-		if len(srcForum.Usergroups) > 0 {
-			fmt.Printf("Forum %d has %d roles\n", forumID, len(srcForum.Usergroups))
+			modRole.Meta.Created = time.Now()
+			modRole.Meta.CreatedById = args.SiteOwnerProfileID
+
+			_, err := modRole.Insert(args.SiteID, args.SiteOwnerProfileID)
+			if err != nil {
+				glog.Error(err)
+				return []error{err}
+			}
+
+			for _, oldModID := range srcForum.Moderators {
+				modID := accounting.GetNewID(args.OriginID, h.ItemTypes[h.ItemTypeProfile], oldModID.ID)
+				if modID == 0 {
+					continue
+				}
+				rp := models.RoleProfileType{}
+				rp.Id = modID
+				_, err := rp.Update(args.SiteID, modRole.Id)
+				if err != nil {
+					glog.Error(err)
+					return []error{err}
+				}
+			}
 		}
+
+		// TODO: Add all custom roles, if there is a moderator role AND
+		// moderators, then add those. If there isn't a moderator role and there
+		// are moderators, create a new role.
+		//
 		// for _, group := range srcForum.Usergroups {
 		// 	forumUsergroups[srcForum.ID] = append(forumMods[srcForum.ID], group.ID)
 		// }
