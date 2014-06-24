@@ -66,8 +66,21 @@ func importAttachment(args conc.Args, itemID int64) error {
 		Width:    srcAttach.Width,
 		Height:   srcAttach.Height,
 	}
+
+	// TODO: parse content-url
+	content := srcAttach.ContentUrl
+	SHA1, err := h.Sha1(content)
+	if err != nil {
+		glog.Errorf("Could not generated SHA-1 for attachment %d\n", srcAttach.Id)
+	}
+	fm.Content = content
+	fm.FileHash = SHA1
+
 	// TODO: read attachment content-url, populate fd.Content and generate SHA-1.
-	fd.Import()
+	err, _ = fm.Import()
+	if err != nil {
+		glog.Errorf("Could not create metadata for attachment %d\n", srcAttach.Id)
+	}
 
 	// Look up the author profile based on the old user ID.
 	authorID := accounting.GetNewID(
@@ -93,12 +106,15 @@ func importAttachment(args conc.Args, itemID int64) error {
 		ItemTypeId: h.ItemTypes[h.ItemTypeComment],
 		// TODO: handle multiple assocations.
 		ItemId:   srcAttach.Associations[0].OnID,
-		FileHash: "SHA-1",
+		FileHash: SHA1,
 		FileName: srcAttach.Name,
-		FileExt:  "...",
+		FileExt:  "",
 		Created:  srcAttach.DateCreated,
 	}
-	at.Import()
+	err, _ = at.Import()
+	if err != nil {
+		glog.Errorf("Could not create attachment for attachment %d\n", srcAttach.Id)
+	}
 
 	tx, err := h.GetTransaction()
 	if err != nil {
