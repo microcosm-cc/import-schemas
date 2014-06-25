@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/golang/glog"
 
@@ -132,6 +133,14 @@ func importHuddle(args conc.Args, itemID int64) error {
 		if !strings.Contains(err.Error(), "links_url_key") {
 			glog.Errorf("Failed to import comment for huddle %d: %s", srcMessage.ID, err)
 			return err
+		}
+	}
+
+	// Mark the huddle as read.
+	for _, p := range huddle.Participants {
+		_, err := models.MarkAsRead(h.ItemTypes[h.ItemTypeHuddle], huddle.Id, p.Id, time.Now())
+		if err != nil {
+			glog.Infof("Could not MarkAsRead huddle %d for recipient %d", huddle.Id, p.Id)
 		}
 	}
 
