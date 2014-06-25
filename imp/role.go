@@ -208,27 +208,6 @@ func importRoles(args conc.Args, gophers int) []error {
 	fmt.Println("Importing custom (microcosm specific) roles...")
 	glog.Info("Importing custom (microcosm specific) roles...")
 
-	// // Loop roles
-	// //		Build a list of all roles that were not forum custom... these *may*
-	// //			be our defaults, review this list
-	// defaultRoles := []int64{}
-	// for _, roleID := range files.GetIDs(args.ItemTypeID) {
-	// 	found := false
-	// 	for _, forumID := range files.GetIDs(h.ItemTypes[h.ItemTypeMicrocosm]) {
-	// 		if forumGroups, ok := forumUsergroups[forumID]; ok {
-	// 			for _, forumGroup := range forumGroups {
-	// 				if forumGroup == roleID {
-	// 					found = true
-	// 				}
-	// 			}
-	// 		}
-	// 	}
-	// 	if !found {
-	// 		defaultRoles = append(defaultRoles, roleID)
-	// 	}
-	// }
-	// fmt.Println(defaultRoles)
-
 	// Loop forums
 	//		If they have a single moderator, change the forum so that the single
 	//			moderator is the owner.
@@ -246,19 +225,131 @@ func importRoles(args conc.Args, gophers int) []error {
 			return []error{err}
 		}
 
-		// No custom usergroups, but we do have moderators... so we'll add a
-		// moderator role and assign the people
-		if len(srcForum.Moderators) > 0 && len(srcForum.Usergroups) == 0 {
+		// Get the new microcosmID
+		microcosmID := accounting.GetNewID(
+			args.OriginID,
+			h.ItemTypes[h.ItemTypeMicrocosm],
+			forumID,
+		)
+		if microcosmID == 0 {
+			glog.Error(fmt.Errorf("Expected microcosm for %d", forumID))
+			return []error{fmt.Errorf("Expected microcosm for %d", forumID)}
+		}
+
+		if len(srcForum.Moderators) == 0 && len(srcForum.Usergroups) == 0 {
+			bar.Increment()
+			continue
+		}
+
+		// Start with copying any usergroups
+		var foundModsRole bool
+		if len(srcForum.Usergroups) > 0 {
+			// We need to copy all usergroups
+			for _, oldRoleId := range oldRoleIDS {
+				role, ok := roles[oldRoleId]
+				if !ok {
+					glog.Error(fmt.Errorf("Expected role for %d", oldRoleId))
+					continue
+				}
+
+				// Update the role for this microcosm
+				role.MicrocosmId = microcosmID
+
+				// And override the ones that were defined by the forum
+				var quickExit bool
+				for _, usergroup := range srcForum.Usergroups {
+					if oldRoleId == usergroup.ID {
+
+						role.CanRead = usergroup.ForumPermissions.View
+						role.CanReadOthers = usergroup.ForumPermissions.View
+						role.CanCreate = usergroup.ForumPermissions.PostNew
+						role.CanUpdate = usergroup.ForumPermissions.EditOthers
+						role.CanDelete = usergroup.ForumPermissions.DeleteOthers
+						role.CanCloseOwn = usergroup.ForumPermissions.CloseOwn
+						role.CanOpenOwn = usergroup.ForumPermissions.OpenOwn
+
+						if !role.CanRead && !role.CanReadOthers &&
+							!role.CanCreate && !role.CanUpdate && !role.CanDelete &&
+							!role.CanCloseOwn && !role.CanOpenOwn {
+							// Everything is false, as our permissions are based on
+							// whitelisting permissions, a full set of blacklists is
+							// equivalent to doing nothing
+							quickExit = true
+						}
+						break
+					}
+				}
+				if quickExit {
+					continue
+				}
+
+				_, err := role.Insert(args.SiteID, args.SiteOwnerProfileID)
+				if err != nil {
+					glog.Errorf("%s %+v", err, role)
+					return []error{err}
+				}
+
+				for _, c := range role.Criteria {
+					_, err := c.Insert(role.Id)
+					if err != nil {
+						glog.Error(err)
+						return []error{err}
+					}
+				}
+
+				if role.IsModerator {
+					foundModsRole = true
+					// Add the profiles declared as members, and keep track of them
+					// as we also need to add the moderators in the srcForum info
+					modsAdded := make(map[int64]bool)
+					for _, p := range role.Profiles {
+						modsAdded[p.Id] = true
+						_, err := p.Update(args.SiteID, role.Id)
+						if err != nil {
+							glog.Error(err)
+							return []error{err}
+						}
+					}
+
+					// Add the moderators
+					for _, oldModID := range srcForum.Moderators {
+						modID := accounting.GetNewID(
+							args.OriginID,
+							h.ItemTypes[h.ItemTypeProfile],
+							oldModID.ID,
+						)
+						if modID == 0 {
+							continue
+						}
+						if _, ok := modsAdded[modID]; !ok {
+							rp := models.RoleProfileType{}
+							rp.Id = modID
+							_, err := rp.Update(args.SiteID, role.Id)
+							if err != nil {
+								glog.Error(err)
+								return []error{err}
+							}
+						}
+					}
+				} else {
+					// Just add the profiles that were already declared as members
+					for _, p := range role.Profiles {
+						_, err := p.Update(args.SiteID, role.Id)
+						if err != nil {
+							glog.Error(err)
+							return []error{err}
+						}
+					}
+				}
+			}
+		}
+
+		// We have moderators that haven't yet been placed into a moderators
+		// role. We'll create a moderator role and assign the people
+		if !foundModsRole && len(srcForum.Moderators) > 0 {
 			modRole := models.RoleType{}
 			modRole.SiteId = args.SiteID
-			modRole.MicrocosmId = accounting.GetNewID(
-				args.OriginID,
-				h.ItemTypes[h.ItemTypeMicrocosm],
-				forumID,
-			)
-			if modRole.MicrocosmId == 0 {
-				continue
-			}
+			modRole.MicrocosmId = microcosmID
 			modRole.Title = "Moderators"
 			modRole.IsModerator = true
 			modRole.CanRead = true
@@ -279,7 +370,11 @@ func importRoles(args conc.Args, gophers int) []error {
 			}
 
 			for _, oldModID := range srcForum.Moderators {
-				modID := accounting.GetNewID(args.OriginID, h.ItemTypes[h.ItemTypeProfile], oldModID.ID)
+				modID := accounting.GetNewID(
+					args.OriginID,
+					h.ItemTypes[h.ItemTypeProfile],
+					oldModID.ID,
+				)
 				if modID == 0 {
 					continue
 				}
