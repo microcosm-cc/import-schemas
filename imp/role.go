@@ -297,7 +297,7 @@ func importRoles(args conc.Args, gophers int) []error {
 					}
 				}
 
-				if role.IsModerator {
+				if role.IsModerator && !foundModsRole {
 					foundModsRole = true
 					// Add the profiles declared as members, and keep track of them
 					// as we also need to add the moderators in the srcForum info
