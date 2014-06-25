@@ -22,6 +22,8 @@ var (
 	conversationsLock sync.RWMutex
 	comments          = make(map[int64]int64)
 	commentsLock      sync.RWMutex
+	huddles           = make(map[int64]int64)
+	huddlesLock       sync.RWMutex
 
 	// Note that this actually looks up old userIDs and returns profileIDs
 	profiles     = make(map[int64]int64)
@@ -135,6 +137,11 @@ func updateStateMap(
 		watchers[oldID] = newID
 		watchersLock.Unlock()
 
+	case h.ItemTypes[h.ItemTypeHuddle]:
+		huddlesLock.Lock()
+		huddles[oldID] = newID
+		huddlesLock.Unlock()
+
 	default:
 		glog.Fatal(fmt.Errorf("Not yet implemented for %d", itemTypeID))
 	}
@@ -192,6 +199,13 @@ func GetNewID(
 			itemID = newID
 		}
 		watchersLock.RUnlock()
+
+	case h.ItemTypes[h.ItemTypeHuddle]:
+		huddlesLock.RLock()
+		if newID, ok := huddles[oldID]; ok {
+			itemID = newID
+		}
+		huddlesLock.RUnlock()
 
 	default:
 		glog.Fatal(fmt.Errorf("Not yet implemented for %d", itemTypeID))

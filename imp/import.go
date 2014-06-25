@@ -112,6 +112,17 @@ func Import() {
 	// 	glog.Flush()
 	// }
 
+	// Import messages as huddles.
+	errs = importHuddles(args, 25)
+	if len(errs) > 0 {
+		for _, err := range errs {
+			glog.Error(err)
+		}
+		glog.Flush()
+
+		return
+	}
+
 	// TODO: Import messages here
 
 	// TODO: Import attachments here
