@@ -77,40 +77,40 @@ func Import() {
 		return
 	}
 
-	// // Import conversations.
-	// errs = importConversations(args, gophers)
-	// if len(errs) > 0 {
-	// 	for _, err := range errs {
-	// 		glog.Error(err)
-	// 	}
-	// 	glog.Flush()
+	// Import conversations.
+	errs = importConversations(args, gophers)
+	if len(errs) > 0 {
+		for _, err := range errs {
+			glog.Error(err)
+		}
+		glog.Flush()
 
-	// 	// If we have errors we do not continue. Errors importing conversations
-	// 	// cascade significantly as comments are associated to the conversations.
-	// 	return
-	// }
+		// If we have errors we do not continue. Errors importing conversations
+		// cascade significantly as comments are associated to the conversations.
+		return
+	}
 
-	// // Import comments.
-	// errs = importComments(args, 25)
-	// if len(errs) > 0 {
-	// 	for _, err := range errs {
-	// 		glog.Error(err)
-	// 	}
-	// 	glog.Flush()
+	// Import comments.
+	errs = importComments(args, 25)
+	if len(errs) > 0 {
+		for _, err := range errs {
+			glog.Error(err)
+		}
+		glog.Flush()
 
-	// 	// If we have errors we do not continue. Errors importing comments
-	// 	// cascade significantly as attachments are associated to the comments.
-	// 	return
-	// }
+		// If we have errors we do not continue. Errors importing comments
+		// cascade significantly as attachments are associated to the comments.
+		return
+	}
 
-	// // Import follows.
-	// errs = importFollows(args, gophers)
-	// if len(errs) > 0 {
-	// 	for _, err := range errs {
-	// 		glog.Error(err)
-	// 	}
-	// 	glog.Flush()
-	// }
+	// Import follows.
+	errs = importFollows(args, gophers)
+	if len(errs) > 0 {
+		for _, err := range errs {
+			glog.Error(err)
+		}
+		glog.Flush()
+	}
 
 	// Import messages as huddles.
 	errs = importHuddles(args, 25)
@@ -123,10 +123,6 @@ func Import() {
 		return
 	}
 
-	// TODO: Import messages here
-
-	// TODO: Import attachments here
-	//
 	// Can be highly concurrent as nearly all activity here is going to be disk
 	// and network limited... perhaps 100+ gophers?
 	errs = importAttachments(args, 1)
