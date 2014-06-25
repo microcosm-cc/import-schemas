@@ -91,7 +91,7 @@ func Import() {
 	}
 
 	// Import comments.
-	/*errs = importComments(args, 25)
+	errs = importComments(args, 25)
 	if len(errs) > 0 {
 		for _, err := range errs {
 			glog.Error(err)
@@ -121,7 +121,7 @@ func Import() {
 		glog.Flush()
 
 		return
-	}*/
+	}
 
 	// TODO: Import messages here
 

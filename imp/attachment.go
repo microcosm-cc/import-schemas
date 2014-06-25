@@ -19,7 +19,6 @@ import (
 
 func importAttachments(args conc.Args, gophers int) (errors []error) {
 
-	// Doesn't exist?
 	args.ItemTypeID = h.ItemTypes[h.ItemTypeAttachment]
 
 	fmt.Println("Loading attachments")
@@ -60,12 +59,13 @@ func importAttachment(args conc.Args, itemID int64) error {
 
 	// Use FileMetadata.Import which idempotently creates necessary row.
 	fm := models.FileMetadataType{
-		Created:  srcAttach.DateCreated,
-		FileName: srcAttach.Name,
-		FileSize: srcAttach.ContentSize,
-		MimeType: srcAttach.MimeType,
-		Width:    srcAttach.Width,
-		Height:   srcAttach.Height,
+		Created:     srcAttach.DateCreated,
+		FileName:    srcAttach.Name,
+		FileSize:    srcAttach.ContentSize,
+		MimeType:    srcAttach.MimeType,
+		Width:       srcAttach.Width,
+		Height:      srcAttach.Height,
+		AttachCount: int64(len(srcAttach.Associations)),
 	}
 
 	parts := strings.SplitN(srcAttach.ContentURL, ",", 2)
@@ -147,7 +147,6 @@ func importAttachment(args conc.Args, itemID int64) error {
 		}
 		defer tx.Rollback()
 
-		fmt.Println(args.ItemTypeID)
 		err = accounting.RecordImport(
 			tx,
 			args.OriginID,

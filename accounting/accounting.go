@@ -139,6 +139,11 @@ func updateStateMap(
 		huddles[oldID] = newID
 		huddlesLock.Unlock()
 
+	case h.ItemTypes[h.ItemTypeAttachment]:
+		attachmentsLock.Lock()
+		attachments[oldID] = newID
+		attachmentsLock.Unlock()
+
 	default:
 		glog.Fatal(fmt.Errorf("Not yet implemented for %d", itemTypeID))
 	}
