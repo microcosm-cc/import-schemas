@@ -388,20 +388,9 @@ func importRoles(args conc.Args, gophers int) []error {
 			}
 		}
 
-		// TODO: Add all custom roles, if there is a moderator role AND
-		// moderators, then add those. If there isn't a moderator role and there
-		// are moderators, create a new role.
-		//
-		// for _, group := range srcForum.Usergroups {
-		// 	forumUsergroups[srcForum.ID] = append(forumMods[srcForum.ID], group.ID)
-		// }
 		bar.Increment()
 	}
 	bar.Finish()
 
 	return []error{}
-}
-
-func importRole(args conc.Args, itemID int64) error {
-	return nil
 }
