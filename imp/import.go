@@ -77,40 +77,40 @@ func Import() {
 		return
 	}
 
-	// Import conversations.
-	errs = importConversations(args, gophers)
-	if len(errs) > 0 {
-		for _, err := range errs {
-			glog.Error(err)
-		}
-		glog.Flush()
+	// // Import conversations.
+	// errs = importConversations(args, gophers)
+	// if len(errs) > 0 {
+	// 	for _, err := range errs {
+	// 		glog.Error(err)
+	// 	}
+	// 	glog.Flush()
 
-		// If we have errors we do not continue. Errors importing conversations
-		// cascade significantly as comments are associated to the conversations.
-		return
-	}
+	// 	// If we have errors we do not continue. Errors importing conversations
+	// 	// cascade significantly as comments are associated to the conversations.
+	// 	return
+	// }
 
-	// Import comments.
-	errs = importComments(args, 25)
-	if len(errs) > 0 {
-		for _, err := range errs {
-			glog.Error(err)
-		}
-		glog.Flush()
+	// // Import comments.
+	// errs = importComments(args, 25)
+	// if len(errs) > 0 {
+	// 	for _, err := range errs {
+	// 		glog.Error(err)
+	// 	}
+	// 	glog.Flush()
 
-		// If we have errors we do not continue. Errors importing comments
-		// cascade significantly as attachments are associated to the comments.
-		return
-	}
+	// 	// If we have errors we do not continue. Errors importing comments
+	// 	// cascade significantly as attachments are associated to the comments.
+	// 	return
+	// }
 
-	// Import follows.
-	errs = importFollows(args, gophers)
-	if len(errs) > 0 {
-		for _, err := range errs {
-			glog.Error(err)
-		}
-		glog.Flush()
-	}
+	// // Import follows.
+	// errs = importFollows(args, gophers)
+	// if len(errs) > 0 {
+	// 	for _, err := range errs {
+	// 		glog.Error(err)
+	// 	}
+	// 	glog.Flush()
+	// }
 
 	// Import messages as huddles.
 	errs = importHuddles(args, 25)
@@ -137,7 +137,7 @@ func Import() {
 		glog.Flush()
 	}
 
-	// TODO: Import roles here
+	// Import roles
 	//
 	// Roles must be the very last thing we do, as once we add permissions we
 	// will be securing the site and a lot of the prior imports would fail if
@@ -146,7 +146,16 @@ func Import() {
 	//
 	// As a result, we shouldn't import roles until we are sure we got here
 	// without error, as roles will reduce the overall resumability of an import
+	errs = importRoles(args, gophers)
+	if len(errs) > 0 {
+		for _, err := range errs {
+			glog.Error(err)
+		}
+		glog.Flush()
 
+		// If we have errors we do not continue. Errors importing roles is fatal
+		return
+	}
 }
 
 func exitWithError(fatal error, errors []error) {

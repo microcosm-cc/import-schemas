@@ -16,25 +16,25 @@ import (
 //   item[oldid] = newid
 // Absence from this means that the item has not been imported
 var (
-	microcosms        map[int64]int64
-	microcosmsLock    sync.RWMutex
-	conversations     map[int64]int64
+	attachments       = make(map[int64]int64)
+	attachmentsLock   sync.RWMutex
+	conversations     = make(map[int64]int64)
 	conversationsLock sync.RWMutex
-	comments          map[int64]int64
+	comments          = make(map[int64]int64)
 	commentsLock      sync.RWMutex
+	huddles           = make(map[int64]int64)
+	huddlesLock       sync.RWMutex
+	microcosms        = make(map[int64]int64)
+	microcosmsLock    sync.RWMutex
 
 	// Note that this actually looks up old userIDs and returns profileIDs
-	profiles     map[int64]int64
+	profiles     = make(map[int64]int64)
 	profilesLock sync.RWMutex
 
-	watchers     map[int64]int64
+	roles        = make(map[int64]int64)
+	rolesLock    sync.RWMutex
+	watchers     = make(map[int64]int64)
 	watchersLock sync.RWMutex
-
-	huddles     map[int64]int64
-	huddlesLock sync.RWMutex
-
-	attachments     map[int64]int64
-	attachmentsLock sync.RWMutex
 )
 
 // CreateImportOrigin records in Postgres that we are about to start an import
@@ -129,6 +129,11 @@ func updateStateMap(
 		comments[oldID] = newID
 		commentsLock.Unlock()
 
+	case h.ItemTypes[h.ItemTypeRole]:
+		rolesLock.Lock()
+		roles[oldID] = newID
+		rolesLock.Unlock()
+
 	case h.ItemTypes[h.ItemTypeWatcher]:
 		watchersLock.Lock()
 		watchers[oldID] = newID
@@ -187,6 +192,13 @@ func GetNewID(
 			itemID = newID
 		}
 		commentsLock.RUnlock()
+
+	case h.ItemTypes[h.ItemTypeWatcher]:
+		rolesLock.RLock()
+		if newID, ok := roles[oldID]; ok {
+			itemID = newID
+		}
+		rolesLock.RUnlock()
 
 	case h.ItemTypes[h.ItemTypeWatcher]:
 		watchersLock.RLock()
