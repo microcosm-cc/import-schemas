@@ -130,16 +130,12 @@ func importComment(args conc.Args, itemID int64) error {
 		return nil
 	}
 
-	// Store the inReplyTo for post-processing
-	if srcComment.InReplyTo > 0 {
-		commentRepliesLock.Lock()
-		commentReplies[srcComment.ID] = srcComment.InReplyTo
-		commentRepliesLock.Unlock()
-	}
-
 	m := models.CommentSummaryType{}
 	m.ItemType = "conversation"
 	m.ItemId = conversationID
+
+	// This is garbage but will be corrected post-process
+	m.InReplyTo = srcComment.InReplyTo
 	m.Markdown = srcComment.Versions[0].Text
 
 	m.Meta.Created = srcComment.DateCreated
