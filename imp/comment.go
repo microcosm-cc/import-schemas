@@ -47,15 +47,25 @@ func importComments(args conc.Args, gophers int) []error {
 	)
 
 	// Process replies
-	fmt.Println("Threading comments...")
-	glog.Info("Threading comments...")
-	errs2 := conc.RunTasks(
-		commentsImportedThisRun,
-		args,
-		importCommentInReplyTo,
-		gophers,
+	db, err := h.GetConnection()
+	if err != nil {
+		errs = append(errs, err)
+		return errs
+	}
+
+	_, err = db.Exec(`
+UPDATE comments c
+   SET in_reply_to = i.item_id
+  FROM imported_items i
+ WHERE i.origin_id = $1
+   AND i.item_type_id = 4
+   AND i.old_id::bigint = c.in_reply_to;`,
+		args.OriginID,
 	)
-	errs = append(errs, errs2...)
+	if err != nil {
+		errs = append(errs, err)
+		return errs
+	}
 
 	// Update comment counts for all users
 	_, err = models.UpdateCommentCountForAllProfiles(args.SiteID)
@@ -187,20 +197,6 @@ func importComment(args conc.Args, itemID int64) error {
 
 	if glog.V(2) {
 		glog.Infof("Successfully imported comment %d", srcComment.ID)
-	}
-
-	return nil
-}
-
-func importCommentInReplyTo(args conc.Args, itemID int64) error {
-
-	if inReplyTo, ok := commentReplies[itemID]; ok {
-		commentID := accounting.GetNewID(args.OriginID, args.ItemTypeID, itemID)
-		replyToID := accounting.GetNewID(args.OriginID, args.ItemTypeID, inReplyTo)
-
-		if commentID > 0 && replyToID > 0 {
-			return models.SetCommentInReplyTo(args.SiteID, commentID, replyToID)
-		}
 	}
 
 	return nil
