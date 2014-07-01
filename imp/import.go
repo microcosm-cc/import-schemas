@@ -125,7 +125,7 @@ func Import() {
 
 	// Can be highly concurrent as nearly all activity here is going to be disk
 	// and network limited... perhaps 100+ gophers?
-	errs = importAttachments(args, 1)
+	errs = importAttachments(args, gophers)
 	if len(errs) > 0 {
 		for _, err := range errs {
 			glog.Error(err)

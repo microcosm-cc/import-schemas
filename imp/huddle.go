@@ -22,8 +22,8 @@ func importHuddles(args conc.Args, gophers int) (errors []error) {
 
 	args.ItemTypeID = h.ItemTypes[h.ItemTypeHuddle]
 
-	fmt.Println("Loading messages")
-	glog.Info("Loading messages")
+	fmt.Println("Importing messages")
+	glog.Info("Importing messages")
 
 	err := files.WalkExportTree(args.RootPath, args.ItemTypeID)
 	if err != nil {
@@ -83,6 +83,12 @@ func importHuddle(args conc.Args, itemID int64) error {
 	huddle.Meta.Created = srcMessage.DateCreated
 	huddle.Meta.CreatedById = authorID
 
+	// Internal accounting to make sure we don't add someone twice as vBulletin
+	// allowed rubbish like that. The author is added internally to the
+	// participants within microcosms, so start by adding the author.
+	participants := make(map[int64]bool)
+	participants[authorID] = true
+
 	for _, to := range srcMessage.To {
 		RID := accounting.GetNewID(
 			args.OriginID,
@@ -93,7 +99,11 @@ func importHuddle(args conc.Args, itemID int64) error {
 			r := models.ProfileSummaryType{
 				Id: RID,
 			}
-			huddle.Participants = append(huddle.Participants, r)
+
+			if _, ok := participants[RID]; !ok {
+				huddle.Participants = append(huddle.Participants, r)
+				participants[RID] = true
+			}
 		}
 	}
 	for _, to := range srcMessage.BCC {
@@ -106,13 +116,17 @@ func importHuddle(args conc.Args, itemID int64) error {
 			r := models.ProfileSummaryType{
 				Id: RID,
 			}
-			huddle.Participants = append(huddle.Participants, r)
+
+			if _, ok := participants[RID]; !ok {
+				huddle.Participants = append(huddle.Participants, r)
+				participants[RID] = true
+			}
 		}
 	}
 
 	_, err = huddle.Import(args.SiteID)
 	if err != nil {
-		glog.Errorf("Failed to create huddle: %+v", err)
+		glog.Errorf("Failed to create huddle %d: %+v", itemID, err)
 		return err
 	}
 
