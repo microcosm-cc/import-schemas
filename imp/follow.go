@@ -17,6 +17,11 @@ import (
 
 func importFollows(args conc.Args, gophers int) (errors []error) {
 
+	if !accounting.ImportFollows(args.OriginID) {
+		// It's been done before
+		return nil
+	}
+
 	args.ItemTypeID = h.ItemTypes[h.ItemTypeWatcher]
 
 	fmt.Println("Importing follows...")
@@ -27,13 +32,19 @@ func importFollows(args conc.Args, gophers int) (errors []error) {
 		exitWithError(err, errors)
 	}
 
-	return conc.RunTasks(
+	errs := conc.RunTasks(
 		files.GetIDs(args.ItemTypeID),
 		args,
 		importFollow,
 		gophers,
 	)
 
+	// Record that we've done it
+	if len(errs) == 0 {
+		accounting.ImportedFollows(args.OriginID)
+	}
+
+	return errs
 }
 
 // For each follow file, map the old profile ID (and following profile ID) to new ones.

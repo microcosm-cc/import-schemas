@@ -47,24 +47,28 @@ func importComments(args conc.Args, gophers int) []error {
 	)
 
 	// Process replies
-	db, err := h.GetConnection()
-	if err != nil {
-		errs = append(errs, err)
-		return errs
-	}
+	if len(errs) == 0 && accounting.ThreadComments(args.OriginID) {
+		db, err := h.GetConnection()
+		if err != nil {
+			errs = append(errs, err)
+			return errs
+		}
 
-	_, err = db.Exec(`
+		_, err = db.Exec(`
 UPDATE comments c
    SET in_reply_to = i.item_id
   FROM imported_items i
  WHERE i.origin_id = $1
    AND i.item_type_id = 4
    AND i.old_id::bigint = c.in_reply_to;`,
-		args.OriginID,
-	)
-	if err != nil {
-		errs = append(errs, err)
-		return errs
+			args.OriginID,
+		)
+		if err != nil {
+			errs = append(errs, err)
+			return errs
+		}
+
+		accounting.ThreadedComments(args.OriginID)
 	}
 
 	// Update comment counts for all users

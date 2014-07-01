@@ -43,11 +43,14 @@ func CreateImportOrigin(tx *sql.Tx, title string, siteID int64) (int64, error) {
 
 	var originID int64
 
+	// TODO: Today this just presumes that we are a vBulletin 3.8 series forum
+	// but in the future we need to make this accept whatever the exported data
+	// tells us.
 	err := tx.QueryRow(`
 INSERT INTO import_origins (
-	title, site_id
+	title, site_id, product, major_version, minor_version
 ) VALUES (
-	$1, $2
+	$1, $2, 'vbulletin', 3, 8
 ) RETURNING origin_id`,
 		title,
 		siteID,
@@ -59,6 +62,71 @@ INSERT INTO import_origins (
 	}
 
 	return originID, nil
+}
+
+func ImportFollows(originID int64) bool {
+	db, err := h.GetConnection()
+	if err != nil {
+		return false
+	}
+
+	var importFollows bool
+
+	db.QueryRow(`SELECT imported_follows
+  FROM import_origins
+ WHERE origin_id = $1`,
+		originID,
+	).Scan(
+		&importFollows,
+	)
+
+	return !importFollows
+}
+
+func ImportedFollows(originID int64) {
+	db, err := h.GetConnection()
+	if err != nil {
+		return
+	}
+
+	db.Exec(`UPDATE import_origins
+   SET imported_follows = TRUE
+ WHERE origin_id = $1`,
+		originID,
+	)
+}
+
+func ThreadComments(originID int64) bool {
+	db, err := h.GetConnection()
+	if err != nil {
+		return false
+	}
+
+	var threadComments bool
+
+	db.QueryRow(`SELECT imported_comments_threaded
+  FROM import_origins
+ WHERE origin_id = $1`,
+		originID,
+	).Scan(
+		&threadComments,
+	)
+
+	return !threadComments
+}
+
+func ThreadedComments(originID int64) {
+
+	db, err := h.GetConnection()
+	if err != nil {
+		return
+	}
+
+	db.Exec(`UPDATE import_origins
+   SET imported_comments_threaded = TRUE
+ WHERE origin_id = $1`,
+		originID,
+	)
 }
 
 // RecordImport records a successful import of any item, this represents
