@@ -150,6 +150,9 @@ func importHuddle(args conc.Args, itemID int64) error {
 		}
 	}
 
+	// Mark the sent version of the huddle as read
+	_, err = models.MarkAsRead(h.ItemTypes[h.ItemTypeHuddle], huddle.Id, authorID, time.Now())
+
 	// Mark the huddle as read.
 	for _, p := range huddle.Participants {
 		_, err := models.MarkAsRead(h.ItemTypes[h.ItemTypeHuddle], huddle.Id, p.Id, time.Now())
