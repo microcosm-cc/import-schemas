@@ -2,6 +2,8 @@ package imp
 
 import (
 	"database/sql"
+	"encoding/base64"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -62,18 +64,18 @@ func createDeletedProfile(args conc.Args) (int64, error) {
 		Name:  "deleted",
 	}
 
-	profileID, err := createProfile(args, sp)
+	profile, err := createProfile(args, sp)
 	if err != nil {
 		glog.Errorf("Failed to get existing user by email address: %+v", err)
 		return 0, err
 	}
 
-	accounting.AddDeletedProfileID(profileID)
+	accounting.AddDeletedProfileID(profile.Id)
 
 	if glog.V(2) {
-		glog.Infof("Successfully create deleted profile %d", profileID)
+		glog.Infof("Successfully create deleted profile %d", profile.Id)
 	}
-	return profileID, nil
+	return profile.Id, nil
 }
 
 // importProfiles iterates the profiles and imports each individually
@@ -102,7 +104,9 @@ func importProfiles(args conc.Args, gophers int) []error {
 	fmt.Println("Importing profiles (2-pass)...")
 	glog.Info("Importing profiles (2-pass)...")
 
-	// indexFile exists, load it and figure out duplicates
+	// indexFile exists, load it and figure out duplicates. Duplicates are
+	// cases where the same email address has been used with multiple profiles.
+	// These are merged into a single profile by the import process.
 	di := src.DirIndex{}
 	err := files.JSONFileToInterface(indexFile, &di)
 	if err != nil {
@@ -118,7 +122,6 @@ func importProfiles(args conc.Args, gophers int) []error {
 			secondPass = append(secondPass, df.ID)
 			continue
 		}
-
 		emails[email] = true
 		firstPass = append(firstPass, df.ID)
 	}
@@ -153,10 +156,19 @@ func importProfile(args conc.Args, itemID int64) error {
 		return err
 	}
 
-	profileID, err := createProfile(args, sp)
+	profile, err := createProfile(args, sp)
 	if err != nil {
 		glog.Errorf("Failed to createProfile %d : %+v", itemID, err)
 		return err
+	}
+
+	if sp.Avatar.ContentURL != "" {
+		glog.Infof("Processing avatar for %v", profile)
+		err := processAvatar(sp, profile)
+		// Avatar processing errors are not fatal, so don't return.
+		if err != nil {
+			glog.Errorf("Error processing avatar: %s", err)
+		}
 	}
 
 	tx, err := h.GetTransaction()
@@ -171,7 +183,7 @@ func importProfile(args conc.Args, itemID int64) error {
 		args.OriginID,
 		args.ItemTypeID,
 		sp.ID,
-		profileID,
+		profile.Id,
 	)
 	if err != nil {
 		glog.Errorf("Failed to recordImport: %+v", err)
@@ -187,8 +199,8 @@ func importProfile(args conc.Args, itemID int64) error {
 	audit.Create(
 		args.SiteID,
 		h.ItemTypes[h.ItemTypeProfile],
-		profileID,
-		profileID,
+		profile.Id,
+		profile.Id,
 		sp.DateCreated,
 		net.ParseIP(sp.IPAddress),
 	)
@@ -200,7 +212,7 @@ func importProfile(args conc.Args, itemID int64) error {
 }
 
 // createProfile puts a profile into the database via microcosm models
-func createProfile(args conc.Args, sp src.Profile) (int64, error) {
+func createProfile(args conc.Args, sp src.Profile) (models.ProfileType, error) {
 
 	u, status, err := models.GetUserByEmailAddress(sp.Email)
 	if err != nil && status != http.StatusNotFound {
@@ -209,9 +221,10 @@ func createProfile(args conc.Args, sp src.Profile) (int64, error) {
 			sp.Email,
 			err,
 		)
-		return 0, err
+		return models.ProfileType{}, err
 	}
 	if status == http.StatusNotFound {
+		glog.Infof("Creating new user for email address: %s", sp.Email)
 		// User doesn't exist, so we should create it
 		u = models.UserType{}
 		u.Email = sp.Email
@@ -220,7 +233,7 @@ func createProfile(args conc.Args, sp src.Profile) (int64, error) {
 		_, err := u.Insert()
 		if err != nil {
 			glog.Errorf("Failed to create user for profile: %+v", err)
-			return 0, err
+			return models.ProfileType{}, err
 		}
 	} else {
 		// User does exist, so we should check whether that user already has a
@@ -228,14 +241,20 @@ func createProfile(args conc.Args, sp src.Profile) (int64, error) {
 		profileID, status, err := models.GetProfileId(args.SiteID, u.ID)
 		if err != nil && status != http.StatusNotFound {
 			glog.Errorf("Failed to get existing profile for user: %+v", err)
-			return 0, err
+			return models.ProfileType{}, err
 		}
+		// If profile ID exists, fetch full profile and return. Otherwise,
+		// a new profile is created below.
 		if status == http.StatusOK {
-			// We already have a profile, return that
-			return profileID, nil
+			profile, _, err := models.GetProfile(args.SiteID, profileID)
+			if err != nil {
+				glog.Errorf("Failed to retrieve existing profile %d: %s", profileID, err)
+			}
+			return profile, nil
 		}
 	}
 
+	glog.Infof("Creating new profile: user: %d", u.ID)
 	// We don't have a profile, but we do now have a user, so create the profile
 	p := models.ProfileType{}
 	p.SiteId = args.SiteID
@@ -252,9 +271,104 @@ func createProfile(args conc.Args, sp src.Profile) (int64, error) {
 
 	_, err = p.Import()
 	if err != nil {
-		glog.Errorf("Failed to create profile for profile %d: %+v", sp.ID, err)
-		return 0, err
+		glog.Errorf("Failed to create profile for imported user %d: %+v", sp.ID, err)
+		return p, err
 	}
 
-	return p.Id, nil
+	return p, nil
+}
+
+func processAvatar(sp src.Profile, profile models.ProfileType) error {
+
+	// Create and associate profile avatar.
+	// Use FileMetadata.Import which idempotently creates necessary row.
+	fm := models.FileMetadataType{
+		Created:     sp.Avatar.DateCreated,
+		FileName:    sp.Avatar.Name,
+		FileSize:    sp.Avatar.ContentSize,
+		MimeType:    sp.Avatar.MimeType,
+		Width:       sp.Avatar.Width,
+		Height:      sp.Avatar.Height,
+		AttachCount: int64(len(sp.Avatar.Associations)),
+	}
+
+	parts := strings.SplitN(sp.Avatar.ContentURL, ",", 2)
+	if len(parts) != 2 {
+		err := errors.New(fmt.Sprintf("Unexpected data URI, attachment %d\n", sp.Avatar.ID))
+		glog.Error(err)
+		return err
+	}
+
+	content, err := base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		err = fmt.Errorf("Could not decode attachment %d: %s\n", sp.Avatar.ID, err)
+		glog.Error(err)
+		return err
+	}
+	fm.Content = content
+
+	SHA1, err := h.Sha1(content)
+	if err != nil {
+		err = fmt.Errorf("Could not generate SHA-1 for attachment %d: %s\n", sp.Avatar.ID, err)
+		glog.Error(err)
+		return err
+	}
+	fm.FileHash = SHA1
+
+	max := int64(1)<<32 - 1
+	_, err = fm.Import(max, max)
+	if err != nil {
+		glog.Error(err)
+		return err
+	}
+
+	// File metadata created, now create an attachment row.
+	// Look up the author profile based on the old user ID.
+	assoc := sp.Avatar.Associations[0]
+
+	var assocItemTypeID int64
+	switch assoc.OnType {
+	case "profile":
+		assocItemTypeID = 3
+	case "user":
+		assocItemTypeID = 3
+	default:
+		return fmt.Errorf("Unknown attachment association: %s\n", assoc.OnType)
+	}
+
+	at := models.AttachmentType{
+		AttachmentMetaId: fm.AttachmentMetaId,
+		ProfileId:        profile.Id,
+		ItemTypeId:       assocItemTypeID,
+		ItemId:           assoc.OnID,
+		FileHash:         SHA1,
+		FileName:         sp.Avatar.Name,
+		Created:          sp.Avatar.DateCreated,
+	}
+	_, err = at.Import()
+	if err != nil {
+		glog.Errorf("Could not import attachment %d\n", sp.Avatar.ID)
+		return err
+	}
+
+	// Now associate the attachment with the profile.
+	profile.AvatarUrlNullable = sql.NullString{
+		String: fmt.Sprintf("%s/%s", h.ApiTypeFile, fm.FileHash),
+		Valid:  true,
+	}
+	profile.AvatarIdNullable = sql.NullInt64{
+		Int64: at.AttachmentId,
+		Valid: true,
+	}
+	if profile.SiteId == 0 {
+		glog.Errorf("%d", profile.SiteId)
+
+	}
+	_, err = profile.Update()
+	if err != nil {
+		glog.Errorf("Failed to update profile: %+v", err)
+		return err
+	}
+
+	return nil
 }
