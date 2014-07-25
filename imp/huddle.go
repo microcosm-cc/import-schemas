@@ -17,7 +17,7 @@ import (
 	"github.com/microcosm-cc/import-schemas/files"
 )
 
-func importHuddles(args conc.Args, gophers int) (errors []error) {
+func importHuddles(args conc.Args, gophers int) []error {
 
 	args.ItemTypeID = h.ItemTypes[h.ItemTypeHuddle]
 
@@ -29,13 +29,19 @@ func importHuddles(args conc.Args, gophers int) (errors []error) {
 		exitWithError(err, []error{})
 	}
 
-	return conc.RunTasks(
+	errs := conc.RunTasks(
 		files.GetIDs(args.ItemTypeID),
 		args,
 		importHuddle,
 		gophers,
 	)
 
+	err = models.MarkAllHuddlesForAllProfilesAsReadOnSite(args.SiteID)
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	return errs
 }
 
 func importHuddle(args conc.Args, itemID int64) error {
