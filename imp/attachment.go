@@ -117,20 +117,36 @@ func importAttachment(args conc.Args, itemID int64) error {
 	for _, assoc := range srcAttach.Associations {
 
 		var assocItemTypeID int64
+		var assocItemID int64
 		switch assoc.OnType {
 		case "comment":
 			assocItemTypeID = 4
+			assocItemID = accounting.GetNewID(
+				args.OriginID,
+				h.ItemTypes[h.ItemTypeComment],
+				assoc.OnID,
+			)
 		case "profile":
 			assocItemTypeID = 3
+			assocItemID = accounting.GetNewID(
+				args.OriginID,
+				h.ItemTypes[h.ItemTypeProfile],
+				assoc.OnID,
+			)
 		default:
 			return fmt.Errorf("Unknown attachment association: %s\n", assoc.OnType)
+		}
+
+		if assocItemID == 0 {
+			// Skip this one
+			return fmt.Errorf("Attachment %d attached to something that doesn't exist\n", itemID)
 		}
 
 		at := models.AttachmentType{
 			AttachmentMetaId: fm.AttachmentMetaId,
 			ProfileId:        authorID,
 			ItemTypeId:       assocItemTypeID,
-			ItemId:           assoc.OnID,
+			ItemId:           assocItemID,
 			FileHash:         SHA1,
 			FileName:         srcAttach.Name,
 			Created:          srcAttach.DateCreated,
@@ -164,7 +180,6 @@ func importAttachment(args conc.Args, itemID int64) error {
 			glog.Errorf("Failed to commit transaction: %+v", err)
 			return err
 		}
-
 	}
 
 	return nil
