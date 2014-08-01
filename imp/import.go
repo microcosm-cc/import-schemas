@@ -5,6 +5,8 @@ import (
 
 	"github.com/golang/glog"
 
+	"github.com/microcosm-cc/microcosm/models"
+
 	"github.com/microcosm-cc/import-schemas/conc"
 	"github.com/microcosm-cc/import-schemas/config"
 )
@@ -17,7 +19,7 @@ const gophers int = 50
 // Import orchestrates and runs the import job, ensuring that any dependencies
 // are imported before they are needed. This is mostly a top level ordering of
 // things: profiles before the comments they made, etc.
-func Import() {
+func Import(finalise bool) {
 	// Load all profiles and create a single user entry corresponding to the site
 	// admin.
 	srcAdminProfile, err := loadProfiles(config.Rootpath, config.SiteOwnerID)
@@ -103,15 +105,6 @@ func Import() {
 		return
 	}
 
-	// Import follows.
-	errs = importFollows(args, gophers)
-	if len(errs) > 0 {
-		for _, err := range errs {
-			glog.Error(err)
-		}
-		glog.Flush()
-	}
-
 	// Import messages as huddles.
 	errs = importHuddles(args, 25)
 	if len(errs) > 0 {
@@ -126,6 +119,36 @@ func Import() {
 	// Can be highly concurrent as nearly all activity here is going to be disk
 	// and network limited... perhaps 100+ gophers?
 	errs = importAttachments(args, gophers)
+	if len(errs) > 0 {
+		for _, err := range errs {
+			glog.Error(err)
+		}
+		glog.Flush()
+	}
+
+	if finalise {
+		doFinalise(args)
+	}
+}
+
+func exitWithError(fatal error, errors []error) {
+	if len(errors) > 0 {
+		fmt.Println("Encountered errors while importing. Please check logs")
+
+		for _, err := range errors {
+			glog.Error(err)
+		}
+	}
+
+	glog.Fatal(fatal)
+}
+
+func doFinalise(args conc.Args) {
+	// These steps are not repeatable and should only be run after everything
+	// else has completed successfully
+
+	// Import follows.
+	errs := importFollows(args, gophers)
 	if len(errs) > 0 {
 		for _, err := range errs {
 			glog.Error(err)
@@ -152,16 +175,6 @@ func Import() {
 		// If we have errors we do not continue. Errors importing roles is fatal
 		return
 	}
-}
 
-func exitWithError(fatal error, errors []error) {
-	if len(errors) > 0 {
-		fmt.Println("Encountered errors while importing. Please check logs")
-
-		for _, err := range errors {
-			glog.Error(err)
-		}
-	}
-
-	glog.Fatal(fatal)
+	models.MarkAllMicrocosmsForAllProfilesAsReadOnSite(args.SiteID)
 }

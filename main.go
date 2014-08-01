@@ -19,6 +19,7 @@ import (
 
 var memprof = flag.String("memprof", "", "write memory profile to file")
 var cpuprof = flag.String("cpuprof", "", "write cpu profile to file")
+var finalise = flag.Bool("finalise", false, "finalise the import")
 
 func main() {
 	flag.Parse()
@@ -104,5 +105,5 @@ func main() {
 	// may not make this as fast as you hope though
 	cache.InitCache("localhost", 11211)
 
-	imp.Import()
+	imp.Import(*finalise)
 }
