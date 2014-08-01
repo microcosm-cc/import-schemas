@@ -340,7 +340,7 @@ func processAvatar(sp src.Profile, profile models.ProfileType) error {
 		AttachmentMetaId: fm.AttachmentMetaId,
 		ProfileId:        profile.Id,
 		ItemTypeId:       assocItemTypeID,
-		ItemId:           assoc.OnID,
+		ItemId:           profile.Id,
 		FileHash:         SHA1,
 		FileName:         sp.Avatar.Name,
 		Created:          sp.Avatar.DateCreated,
