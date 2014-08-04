@@ -318,7 +318,7 @@ func processAvatar(sp src.Profile, profile models.ProfileType) error {
 	max := int64(1)<<32 - 1
 	_, err = fm.Import(max, max)
 	if err != nil {
-		glog.Error(err)
+		glog.Errorf(fmt.Sprintf("profileID: %d : %s", profile.Id, err))
 		return err
 	}
 

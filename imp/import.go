@@ -14,7 +14,7 @@ import (
 // We should only use 50 gophers as we expect each one to trigger database
 // connections and eventually we need this to run on a live site without
 // breaking it
-const gophers int = 50
+const gophers int = 2
 
 // Import orchestrates and runs the import job, ensuring that any dependencies
 // are imported before they are needed. This is mostly a top level ordering of
@@ -93,7 +93,7 @@ func Import(finalise bool) {
 	}
 
 	// Import comments.
-	errs = importComments(args, 25)
+	errs = importComments(args, gophers)
 	if len(errs) > 0 {
 		for _, err := range errs {
 			glog.Error(err)
@@ -106,7 +106,7 @@ func Import(finalise bool) {
 	}
 
 	// Import messages as huddles.
-	errs = importHuddles(args, 25)
+	errs = importHuddles(args, gophers)
 	if len(errs) > 0 {
 		for _, err := range errs {
 			glog.Error(err)
